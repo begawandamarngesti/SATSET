@@ -1,0 +1,108 @@
+<!doctype html><html lang=id><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Admin</title>
+<style>
+body{font:15px system-ui;margin:0;background:#f4f4f8;color:#222}main{max-width:960px;margin:auto;padding:12px}
+.c{background:#fff;border-radius:10px;padding:12px;margin:10px 0}
+input,select,textarea,button{font:inherit;padding:7px;margin:2px;border:1px solid #ccc;border-radius:6px}
+button{background:#4f46e5;color:#fff;border:0;cursor:pointer}button.g{background:#888}button.r{background:#d33}button:disabled{background:#bbb}
+table{width:100%;border-collapse:collapse}th{font-size:12px;color:#666;text-align:left;padding:2px}td{padding:2px}
+td input[type=number]{width:100px}.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.sm{font-size:12px;color:#666}
+img{max-width:110px;border-radius:6px;display:block}.sticky{position:sticky;bottom:0;background:#f4f4f8;padding:8px 0}
+.tg{background:#eef;padding:6px 8px;border-radius:6px;display:inline-block;margin:2px}.tg input{width:90px}
+</style>
+<main id=app>Memuat...</main>
+<script>
+let K=sessionStorage.k||'',S={clusters:[],products:[],variants:[],settings:{}},O=null,NQ=null,E=null,tab='p',busy=false;
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),rp=n=>'Rp'+(+n||0).toLocaleString('id-ID');
+const img=(f,w,ql)=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,w/i.width),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',ql||.7))};i.src=URL.createObjectURL(f)});
+async function api(b,qs){
+ const r=await fetch('/api/admin'+(qs||''),{method:b?'POST':'GET',headers:{Authorization:'Bearer '+K,'Content-Type':'application/json'},body:b&&JSON.stringify(b)});
+ const j=await r.json();
+ if(r.status===401){K=prompt('Password admin')||'';sessionStorage.k=K;return api(b,qs)}
+ if(!r.ok)alert(j.error);return j;
+}
+async function load(){S={...S,...await api()};render()}
+async function loadOrders(more){
+ if(!more||!O)O={list:[],st:O?O.st:'',more:false,counts:O&&O.counts};
+ const b=more&&O.list.length?'&before='+O.list[O.list.length-1].id:'';
+ const r=await api(null,'?w=orders&status='+O.st+b);
+ O.list=O.list.concat(r.orders);O.more=r.orders.length>=40;if(r.counts)O.counts=r.counts;render();
+}
+function setSt(s){O.st=s;loadOrders()}
+function go(t){tab=t;E=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else render()}
+function render(){
+ $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():E?editor():list());
+}
+/* ---------- produk ---------- */
+function list(){
+ return `<div class=c><input id=cn placeholder="Nama klaster"><button onclick=addC()>Tambah klaster</button></div>`+S.clusters.map(c=>`<div class=c><b>${esc(c.name)}</b> <button onclick="edit(0,${c.id})">Tambah produk</button> <button class=r onclick=delC(${c.id})>Hapus klaster</button>${S.products.filter(p=>p.cluster_id==c.id).map(p=>{const vs=S.variants.filter(v=>v.product_id==p.id),pr=vs.map(v=>v.price);return `<div style="margin-top:6px">${esc(p.name)} <span class=sm>${vs.length} varian${pr.length?' · '+rp(Math.min(...pr))+(Math.max(...pr)>Math.min(...pr)?' – '+rp(Math.max(...pr)):''):''}${p.active?'':' · disembunyikan'}</span> <button class=g onclick=edit(${p.id})>Edit</button></div>`}).join('')}</div>`).join('');
+}
+async function addC(){const n=$('#cn').value.trim();if(!n)return;await api({a:'save',t:'clusters',row:{name:n,sort:S.clusters.length}});load()}
+async function delC(id){if(confirm('Hapus klaster beserta produknya?')){await api({a:'del',t:'clusters',id});load()}}
+function edit(id,cid){E={p:id?{...S.products.find(x=>x.id==id)}:{cluster_id:cid,active:true},vs:S.variants.filter(v=>v.product_id==id).map(v=>({...v})),del:[],bp:0,ao:{}};
+ if(id&&E.p.image_v)E.p.preview='/api/img?id='+id+'&v='+E.p.image_v;
+ if(id&&E.p.size_v)E.p.sizePrev='/api/img?k=size&id='+id+'&v='+E.p.size_v;
+ // isi harga dasar = harga termurah supaya tidak mulai dari nol
+ const pr=E.vs.map(v=>v.price).filter(Boolean);if(pr.length)E.bp=Math.min(...pr);
+ render()}
+function sync(){if($('#n')){E.p.name=$('#n').value;E.p.description=$('#d').value;E.p.cluster_id=+$('#cl').value;E.p.active=$('#ac').checked;document.querySelectorAll('[data-vi]').forEach(el=>{const v=E.vs[+el.dataset.vi];if(!v)return;const f=el.dataset.f;v[f]=f==='active'?el.checked:(+el.value||0)})}}
+const AT=[['model','Model'],['size','Ukuran'],['color','Warna']];
+function addons(){
+ const out=AT.map(([k,l])=>{const o=[...new Set(E.vs.map(v=>v[k]).filter(Boolean))];return o.length?`<div class=sm style="margin-top:6px">Tambahan harga ${l}:</div>`+o.map(x=>`<span class=tg>${esc(x)} +<input type=number placeholder=0 data-k="${esc(k+':'+x)}" value="${E.ao[k+':'+x]||''}" onchange="E.ao[this.dataset.k]=+this.value||0"></span>`).join(''):''}).join('');
+ return out;
+}
+function editor(){
+ return `<div class=c><input id=n placeholder="Nama produk" value="${esc(E.p.name)}"><select id=cl>${S.clusters.map(c=>`<option value=${c.id} ${c.id==E.p.cluster_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><br><textarea id=d placeholder=Deskripsi style="width:95%">${esc(E.p.description)}</textarea><div>${E.p.image||E.p.preview?`<img src="${esc(E.p.image||E.p.preview)}">`:''}<input type=file accept=image/* onchange=pic(this)></div><div class=sm style="margin-top:6px">Tabel panduan ukuran (opsional):</div><div>${E.p.size||E.p.sizePrev?`<img src="${esc(E.p.size||E.p.sizePrev)}" style="max-width:200px">`:''}<input type=file accept=image/* onchange=picSize(this)></div><label><input type=checkbox id=ac ${E.p.active?'checked':''}> Tampil di toko</label></div>
+<div class=c><b>1. Buat kombinasi</b> <span class=sm>(pisahkan dengan koma, kosongkan yang tidak perlu)</span><br><input id=m placeholder="Model: Pendek,Panjang"><input id=s placeholder="Ukuran: M,L,XL"><input id=w placeholder="Warna: Hitam,Putih"><button onclick=gen()>Buat kombinasi</button><button class=g onclick=noVar()>Produk tanpa pilihan</button></div>
+<div class=c><b>2. Atur harga massal</b><div class=row>Harga dasar <input type=number id=bp value="${E.bp||''}" placeholder="mis. 75000" onchange="E.bp=+this.value||0"></div>${addons()||'<div class=sm>Buat kombinasi dulu.</div>'}<div class=row style="margin-top:6px"><button onclick=applyPrice()>Terapkan harga ke semua baris</button>Stok semua <input type=number id=bs placeholder="mis. 20" style="width:90px"><button class=g onclick=applyStock()>Set stok</button></div><div class=sm>Harga baris = harga dasar + tambahan model + ukuran + warna. Setelah itu tiap baris masih bisa diedit manual.</div></div>
+<div class=c><b>3. Daftar varian</b> (${E.vs.length})<div style="overflow-x:auto"><table><tr><th>Model<th>Ukuran<th>Warna<th>Harga<th>Stok<th>Aktif<th>${E.vs.map((v,i)=>`<tr><td>${v.model||v.size||v.color?esc(v.model):'<i class=sm>(tanpa pilihan)</i>'}<td>${esc(v.size)}<td>${esc(v.color)}<td><input type=number placeholder=Harga data-vi=${i} data-f=price value=${v.price||''} ${v.price>0?'':'style="border-color:#d33"'}><td><input type=number data-vi=${i} data-f=stock value=${v.stock}><td><input type=checkbox data-vi=${i} data-f=active ${v.active?'checked':''}><td><button class=r onclick=rmv(${i})>x</button>`).join('')}</table></div></div>
+<div class=sticky><button id=sv onclick=save()>Simpan</button><button class=g onclick="E=null;render()">Batal</button>${E.p.id?`<button class=r onclick=delP()>Hapus produk</button>`:''}</div>`;
+}
+async function picSize(el){if(!el.files[0])return;sync();E.p.size=await img(el.files[0],1000,.85);render()}
+async function pic(el){if(!el.files[0])return;sync();E.p.image=await img(el.files[0],480,.75);render()}
+function gen(){
+ sync();const L=q=>$(q).value.split(',').map(x=>x.trim()).filter(Boolean),M=L('#m'),Z=L('#s'),W=L('#w');
+ if(!M.length&&!Z.length&&!W.length)return alert('Isi minimal salah satu: model, ukuran, atau warna.\nUntuk produk tanpa pilihan (1 harga saja), klik tombol "Produk tanpa pilihan".');
+ for(const m of M.length?M:[''])for(const s of Z.length?Z:[''])for(const w of W.length?W:[''])
+  if(!E.vs.some(v=>(v.model||'')==m&&(v.size||'')==s&&(v.color||'')==w))E.vs.push({model:m||null,size:s||null,color:w||null,price:0,stock:99,active:true});
+ render();
+}
+function noVar(){sync();if(E.vs.some(v=>!v.model&&!v.size&&!v.color))return;E.vs.push({model:null,size:null,color:null,price:0,stock:99,active:true});render()}
+function applyPrice(){sync();E.bp=+$('#bp').value||0;if(!E.bp)return alert('Isi harga dasar dulu.');
+ E.vs.forEach(v=>v.price=E.bp+(E.ao['model:'+v.model]||0)+(E.ao['size:'+v.size]||0)+(E.ao['color:'+v.color]||0));render()}
+function applyStock(){sync();const n=$('#bs').value;if(n==='')return;E.vs.forEach(v=>v.stock=Math.max(0,+n||0));render()}
+function rmv(i){sync();const v=E.vs.splice(i,1)[0];if(v.id)E.del.push(v.id);render()}
+async function delP(){if(!confirm('Hapus produk ini beserta semua variannya?'))return;await api({a:'del',t:'products',id:E.p.id});E=null;load()}
+async function save(){
+ if(busy)return;sync();if(!E.p.name)return alert('Isi nama produk.');
+ if(!E.vs.length)return alert('Belum ada varian. Buat kombinasi dulu, atau klik "Produk tanpa pilihan".');
+ if(E.vs.some(v=>v.active&&!(v.price>0)))return alert('Masih ada varian aktif dengan harga 0 (kolom bergaris merah). Isi harganya atau hapus barisnya.');
+ busy=true;$('#sv').disabled=true;$('#sv').textContent='Menyimpan...';
+ try{
+  const {id,cluster_id,name,description,active}=E.p,row={id,cluster_id,name,description,active};
+  if(E.p.image){row.image=E.p.image;row.image_v=Date.now()}
+  if(E.p.size){row.size_img=E.p.size;row.size_v=Date.now()}
+  const p=await api({a:'save',t:'products',row});if(!p.id)return;
+  await api({a:'variants',product_id:p.id,rows:E.vs,del:E.del});
+  E=null;await load();
+ }finally{busy=false;if($('#sv')){$('#sv').disabled=false;$('#sv').textContent='Simpan'}}
+}
+/* ---------- pesanan ---------- */
+function orders(){
+ const c=O.counts||{},tb=[['','Semua'],['menunggu','Menunggu ('+(c.menunggu??0)+')'],['lunas','Lunas ('+(c.lunas??0)+')'],['batal','Batal ('+(c.batal??0)+')']];
+ return `<div class=c>${tb.map(([v,l])=>`<button class="${O.st===v?'':'g'}" onclick="setSt('${v}')">${l}</button>`).join('')} <button class=g onclick=resync()>Sinkron ke Sheets</button></div>`+
+ (O.list.map(o=>`<div class=c id=o${o.id}><b>#${o.id}</b> ${esc(o.name)}, ${esc(o.phone)}${o.prodi?' · '+esc(o.prodi)+' / '+esc(o.gugus):''} <span class=sm>${new Date(o.created_at).toLocaleString('id-ID')}</span><br>${o.items.map(i=>esc(i.name)+' x'+(+i.qty)).join('<br>')}<br><b>${rp(o.total)}</b> (${esc(o.status)}) ${o.sheet_ok?'':'<span class=sm style="color:#d33">belum masuk Sheets</span>'}<div class=pf><button class=g onclick=proof(${o.id})>Lihat bukti bayar</button></div>${o.status==='menunggu'?`<button onclick=paid(${o.id})>Tandai lunas</button>`:''}${o.status!=='batal'?`<button class=r onclick=cancelO(${o.id})>Batalkan</button>`:''}</div>`).join('')||'<p>Belum ada pesanan.</p>')+(O.more?`<button class=g onclick="loadOrders(true)">Muat lebih banyak</button>`:'');
+}
+async function proof(id){const el=$('#o'+id+' .pf');el.textContent='Memuat...';const r=await api(null,'?w=proof&id='+id);el.innerHTML=r.proof?`<img src="${esc(r.proof)}" style="max-width:260px">`:'Tidak ada bukti'}
+async function paid(id){const r=await api({a:'paid',id});if(r.sheet==='gagal')alert('Status tersimpan, tapi gagal menulis ke Google Sheets. Klik "Sinkron ke Sheets" nanti.\n\nPenyebab: '+r.err);loadOrders()}
+async function cancelO(id){if(!confirm('Batalkan pesanan ini? Stok dikembalikan.'))return;const r=await api({a:'cancel',id});if(r.sheet==='gagal')alert('Dibatalkan, tapi belum tersinkron ke Sheets.\n\nPenyebab: '+r.err);loadOrders()}
+async function resync(){const r=await api({a:'resync'});alert(r.ok+' pesanan tersinkron, '+r.fail+' gagal, sisa '+r.left+(r.left?' (klik lagi).':'.')+(r.err?'\n\nPenyebab gagal: '+r.err:''));loadOrders()}
+/* ---------- pengaturan ---------- */
+function settings(){
+ const q=NQ||(S.settings.qris_v?'/api/img?k=qris&v='+S.settings.qris_v:'');
+ return `<div class=c><b>Link grup WhatsApp</b><div class=sm>Pembeli diarahkan ke sini setelah pesanan berhasil.</div><input id=wa style="width:95%" placeholder="https://chat.whatsapp.com/xxxx" value="${esc(S.settings.wa_link)}"></div>
+<div class=c><b>Gambar QRIS</b>${q?`<img src="${esc(q)}" style="max-width:220px;margin:6px 0">`:'<div class=sm>Belum ada.</div>'}<input type=file accept=image/* onchange=picQ(this)></div><button id=ss onclick=saveSet()>Simpan pengaturan</button>`;
+}
+async function picQ(el){if(!el.files[0])return;S.settings.wa_link=$('#wa').value;NQ=await img(el.files[0],1000,.92);render()}
+async function saveSet(){const b=$('#ss');b.disabled=true;b.textContent='Menyimpan...';const wa=$('#wa').value.trim();const r=await api({a:'settings',wa_link:wa,qris:NQ});if(r.ok){NQ=null;await load()}else{b.disabled=false;b.textContent='Simpan pengaturan'}}
+load();
+</script>
