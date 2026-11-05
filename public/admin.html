@@ -58,7 +58,7 @@ function editor(){
 <div class=sticky><button id=sv onclick=save()>Simpan</button><button class=g onclick="E=null;render()">Batal</button>${E.p.id?`<button class=r onclick=delP()>Hapus produk</button>`:''}</div>`;
 }
 async function picSize(el){if(!el.files[0])return;sync();E.p.size=await img(el.files[0],1000,.85);render()}
-async function pic(el){if(!el.files[0])return;sync();E.p.image=await img(el.files[0],700);render()}
+async function pic(el){if(!el.files[0])return;sync();E.p.image=await img(el.files[0],480,.75);render()}
 function gen(){
  sync();const L=q=>$(q).value.split(',').map(x=>x.trim()).filter(Boolean),M=L('#m'),Z=L('#s'),W=L('#w');
  if(!M.length&&!Z.length&&!W.length)return alert('Isi minimal salah satu: model, ukuran, atau warna.\nUntuk produk tanpa pilihan (1 harga saja), klik tombol "Produk tanpa pilihan".');
@@ -90,12 +90,12 @@ async function save(){
 function orders(){
  const c=O.counts||{},tb=[['','Semua'],['menunggu','Menunggu ('+(c.menunggu??0)+')'],['lunas','Lunas ('+(c.lunas??0)+')'],['batal','Batal ('+(c.batal??0)+')']];
  return `<div class=c>${tb.map(([v,l])=>`<button class="${O.st===v?'':'g'}" onclick="setSt('${v}')">${l}</button>`).join('')} <button class=g onclick=resync()>Sinkron ke Sheets</button></div>`+
- (O.list.map(o=>`<div class=c id=o${o.id}><b>#${o.id}</b> ${esc(o.name)}, ${esc(o.phone)} <span class=sm>${new Date(o.created_at).toLocaleString('id-ID')}</span><br>${o.items.map(i=>esc(i.name)+' x'+(+i.qty)).join('<br>')}<br><b>${rp(o.total)}</b> (${esc(o.status)}) ${o.sheet_ok?'':'<span class=sm style="color:#d33">belum masuk Sheets</span>'}<div class=pf><button class=g onclick=proof(${o.id})>Lihat bukti bayar</button></div>${o.status==='menunggu'?`<button onclick=paid(${o.id})>Tandai lunas</button>`:''}${o.status!=='batal'?`<button class=r onclick=cancelO(${o.id})>Batalkan</button>`:''}</div>`).join('')||'<p>Belum ada pesanan.</p>')+(O.more?`<button class=g onclick="loadOrders(true)">Muat lebih banyak</button>`:'');
+ (O.list.map(o=>`<div class=c id=o${o.id}><b>#${o.id}</b> ${esc(o.name)}, ${esc(o.phone)}${o.prodi?' · '+esc(o.prodi)+' / '+esc(o.gugus):''} <span class=sm>${new Date(o.created_at).toLocaleString('id-ID')}</span><br>${o.items.map(i=>esc(i.name)+' x'+(+i.qty)).join('<br>')}<br><b>${rp(o.total)}</b> (${esc(o.status)}) ${o.sheet_ok?'':'<span class=sm style="color:#d33">belum masuk Sheets</span>'}<div class=pf><button class=g onclick=proof(${o.id})>Lihat bukti bayar</button></div>${o.status==='menunggu'?`<button onclick=paid(${o.id})>Tandai lunas</button>`:''}${o.status!=='batal'?`<button class=r onclick=cancelO(${o.id})>Batalkan</button>`:''}</div>`).join('')||'<p>Belum ada pesanan.</p>')+(O.more?`<button class=g onclick="loadOrders(true)">Muat lebih banyak</button>`:'');
 }
 async function proof(id){const el=$('#o'+id+' .pf');el.textContent='Memuat...';const r=await api(null,'?w=proof&id='+id);el.innerHTML=r.proof?`<img src="${esc(r.proof)}" style="max-width:260px">`:'Tidak ada bukti'}
-async function paid(id){const r=await api({a:'paid',id});if(r.sheet==='gagal')alert('Status tersimpan, tapi gagal menulis ke Google Sheets. Klik "Sinkron ke Sheets" nanti.');loadOrders()}
-async function cancelO(id){if(!confirm('Batalkan pesanan ini? Stok dikembalikan.'))return;const r=await api({a:'cancel',id});if(r.sheet==='gagal')alert('Dibatalkan, tapi belum tersinkron ke Sheets.');loadOrders()}
-async function resync(){const r=await api({a:'resync'});alert(r.ok+' pesanan tersinkron, '+r.fail+' gagal, sisa '+r.left+(r.left?' (klik lagi).':'.'));loadOrders()}
+async function paid(id){const r=await api({a:'paid',id});if(r.sheet==='gagal')alert('Status tersimpan, tapi gagal menulis ke Google Sheets. Klik "Sinkron ke Sheets" nanti.\n\nPenyebab: '+r.err);loadOrders()}
+async function cancelO(id){if(!confirm('Batalkan pesanan ini? Stok dikembalikan.'))return;const r=await api({a:'cancel',id});if(r.sheet==='gagal')alert('Dibatalkan, tapi belum tersinkron ke Sheets.\n\nPenyebab: '+r.err);loadOrders()}
+async function resync(){const r=await api({a:'resync'});alert(r.ok+' pesanan tersinkron, '+r.fail+' gagal, sisa '+r.left+(r.left?' (klik lagi).':'.')+(r.err?'\n\nPenyebab gagal: '+r.err:''));loadOrders()}
 /* ---------- pengaturan ---------- */
 function settings(){
  const q=NQ||(S.settings.qris_v?'/api/img?k=qris&v='+S.settings.qris_v:'');

@@ -36,17 +36,19 @@ function bar(){
 function rm(id){delete cart[id];bar();Object.keys(cart).length?co():$('#dlg').close()}
 function co(){
  const n=Object.values(cart),t=n.reduce((s,i)=>s+i.v.price*i.q,0);
- $('#dlg').innerHTML=`<h3>Pesanan</h3>${n.map(i=>`<div>${esc(i.name)} x${i.q} = ${rp(i.v.price*i.q)} <button style="width:auto;background:#d33" onclick=rm(${i.v.id})>x</button></div>`).join('')}<p><b>Total ${rp(t)}</b></p><input id=nm placeholder="Nama"><input id=hp placeholder="No. HP/WA" inputmode=tel><p>Scan QRIS dan bayar sesuai total:</p>${D.qris?`<img src="${esc(D.qris)}" style="max-width:100%">`:'<p><i>QRIS belum diatur penjual.</i></p>'}<p>Upload bukti bayar:</p><input id=pf type=file accept=image/*><button id=sd onclick=send()>Kirim pesanan</button><button class=gr onclick="$('#dlg').close()">Tutup</button>`;
+ $('#dlg').innerHTML=`<h3>Pesanan</h3>${n.map(i=>`<div>${esc(i.name)} x${i.q} = ${rp(i.v.price*i.q)} <button style="width:auto;background:#d33" onclick=rm(${i.v.id})>x</button></div>`).join('')}<p><b>Total ${rp(t)}</b></p><input id=nm placeholder="Nama"><input id=hp placeholder="No. HP/WA" inputmode=tel><input id=pr placeholder="Prodi"><input id=gg placeholder="Gugus"><p>Scan QRIS dan bayar sesuai total:</p>${D.qris?`<img src="${esc(D.qris)}" style="max-width:100%">`:'<p><i>QRIS belum diatur penjual.</i></p>'}<input id=rt placeholder="Ketik ulang total (angka saja)" inputmode=numeric><p>Upload bukti bayar:</p><input id=pf type=file accept=image/*><button id=sd onclick=send()>Kirim pesanan</button><button class=gr onclick="$('#dlg').close()">Tutup</button>`;
  $('#dlg').showModal();
 }
 async function send(){
  if(sending)return;
  const nm=$('#nm').value.trim(),hp=$('#hp').value.trim(),f=$('#pf').files[0],b=$('#sd');
- if(!nm||!hp||!f)return alert('Isi nama, nomor HP, dan upload bukti bayar.');
+ const pr=$('#pr').value.trim(),gg=$('#gg').value.trim(),rt=+($('#rt').value.replace(/\D/g,'')),tot=Object.values(cart).reduce((s,i)=>s+i.v.price*i.q,0);
+ if(!nm||!hp||!pr||!gg||!f)return alert('Isi nama, nomor HP, prodi, gugus, dan upload bukti bayar.');
+ if(rt!==tot)return alert('Total yang kamu ketik ulang belum sama dengan total pesanan ('+rp(tot)+').');
  sending=true;b.disabled=true;b.textContent='Mengirim...';
  try{
   const proof=await img(f,800);
-  const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nm,phone:hp,proof,items:Object.values(cart).map(i=>({variant_id:i.v.id,qty:i.q}))})});
+  const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nm,phone:hp,prodi:pr,gugus:gg,proof,items:Object.values(cart).map(i=>({variant_id:i.v.id,qty:i.q}))})});
   const j=await r.json();
   if(!r.ok){alert(j.error);if(r.status===409){cart={};bar();$('#dlg').close();loadD()}return}
   cart={};bar();loadD();const wa=D&&D.wa;
