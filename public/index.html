@@ -1,26 +1,29 @@
 <!doctype html><html lang=id><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Toko</title>
-<style>body{font:15px system-ui;margin:0;background:#f5f3ff;color:#222;padding-bottom:70px}#app{max-width:1000px;margin:auto;padding:10px}summary{font-weight:700;font-size:18px;padding:10px 0;cursor:pointer}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}.k{background:#fff;border-radius:10px;padding:10px}.k img{width:100%;border-radius:8px}label{display:block;font-size:12px;color:#666}select,input,button{font:inherit;padding:7px;border:1px solid #ccc;border-radius:6px;width:100%;box-sizing:border-box;margin:2px 0}button{background:#6d28d9;color:#fff;border:0}button:disabled{background:#bbb}.bar{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 -2px 6px #0003}.bar button{width:auto}dialog{max-width:420px;width:92%;border-radius:12px;border:0}</style>
+<style>body{font:15px system-ui;margin:0;background:#f5f3ff;color:#222;padding-bottom:70px}#app{max-width:1000px;margin:auto;padding:10px}summary{font-weight:700;font-size:18px;padding:10px 0;cursor:pointer}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}.k{background:#fff;border-radius:10px;padding:10px}.k img{width:100%;border-radius:8px}label{display:block;font-size:12px;color:#666}select,input,button{font:inherit;padding:7px;border:1px solid #ccc;border-radius:6px;width:100%;box-sizing:border-box;margin:2px 0}button{background:#6d28d9;color:#fff;border:0}button:disabled{background:#bbb}button.gr{background:#888}button.ln{background:#ede9fe;color:#5b21b6}.bar{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 -2px 6px #0003}.bar button{width:auto}dialog{max-width:420px;width:92%;border-radius:12px;border:0}</style>
 <main id=app>Memuat...</main><div id=bar></div><dialog id=dlg></dialog>
 <script>
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),rp=n=>'Rp'+(+n).toLocaleString('id-ID');
 const A=['model','size','color'],LB={model:'Model',size:'Ukuran',color:'Warna'};
-let D,cart={};
+let D,cart={},sending=false;
 const img=(f,w)=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,w/i.width),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',.7))};i.src=URL.createObjectURL(f)});
-fetch('/api/products').then(r=>r.json()).then(d=>{D=d;draw()});
+const loadD=()=>fetch('/api/products').then(r=>r.json()).then(d=>{D=d;draw()}).catch(()=>{if(!D)$('#app').textContent='Gagal memuat. Coba muat ulang halaman.'});
+loadD();
 function draw(){
  $('#app').innerHTML=D.clusters.map(c=>{const ps=D.products.filter(p=>p.cluster_id==c.id);return ps.length?`<details open><summary>${esc(c.name)}</summary><div class=g>${ps.map(card).join('')}</div></details>`:''}).join('')||'Belum ada produk.';
  D.products.forEach(p=>upd(p.id));bar();
 }
+function range(vs){const x=vs.filter(v=>v.stock>0).map(v=>v.price);if(!x.length)return '';const a=Math.min(...x),b=Math.max(...x);return a==b?rp(a):rp(a)+' – '+rp(b)}
 function card(p){
  const vs=D.variants.filter(v=>v.product_id==p.id);
- return `<div class=k id=p${p.id}>${p.image?`<img src="${esc(p.image)}">`:''}<b>${esc(p.name)}</b><p>${esc(p.description)}</p>${A.map(a=>{const o=[...new Set(vs.map(v=>v[a]).filter(Boolean))];return o.length?`<label>${LB[a]}<select data-a=${a} onchange=upd(${p.id})>${o.map(x=>`<option>${esc(x)}</option>`).join('')}</select></label>`:''}).join('')}<label>Jumlah<input type=number min=1 value=1 data-q onchange=upd(${p.id})></label><div class=pr></div><button data-b onclick=add(${p.id})>Tambah ke keranjang</button></div>`;
+ return `<div class=k id=p${p.id}>${p.image?`<img loading=lazy src="${esc(p.image)}">`:''}<b>${esc(p.name)}</b><div style="color:#6d28d9;font-size:13px">${range(vs)}</div><p>${esc(p.description)}</p>${p.size_img?`<button class=ln onclick="guide(${p.id})">📏 Panduan ukuran</button>`:''}${A.map(a=>{const o=[...new Set(vs.map(v=>v[a]).filter(Boolean))];return o.length?`<label>${LB[a]}<select data-a=${a} onchange=upd(${p.id})>${o.map(x=>`<option>${esc(x)}</option>`).join('')}</select></label>`:''}).join('')}<label>Jumlah<input type=number min=1 value=1 data-q onchange=upd(${p.id})></label><div class=pr></div><button data-b onclick=add(${p.id})>Tambah ke keranjang</button></div>`;
 }
+function guide(pid){const p=D.products.find(x=>x.id==pid);$('#dlg').innerHTML=`<h3>Panduan ukuran</h3><img src="${esc(p.size_img)}" style="max-width:100%"><button class=gr onclick="$('#dlg').close()">Tutup</button>`;$('#dlg').showModal()}
 function sel(pid){const s={};$('#p'+pid).querySelectorAll('select').forEach(x=>s[x.dataset.a]=x.value);return D.variants.find(v=>v.product_id==pid&&A.every(a=>!s[a]||v[a]==s[a]))}
 function qty(pid){return Math.max(1,Math.floor(+$('#p'+pid).querySelector('[data-q]').value)||1)}
 function upd(pid){
  const el=$('#p'+pid),v=sel(pid),q=qty(pid),pr=el.querySelector('.pr'),b=el.querySelector('[data-b]');
  if(!v||v.stock<1){pr.textContent=v?'Habis terjual':'Kombinasi tidak tersedia';b.disabled=true}
- else{pr.innerHTML=`<b>${rp(v.price)}</b><br>Subtotal ${rp(v.price*q)}`;b.disabled=false}
+ else{pr.innerHTML=`<b>${rp(v.price)}</b><br>Subtotal ${rp(v.price*q)}${v.stock<=5?`<br><small style="color:#d33">Sisa ${v.stock}</small>`:''}`;b.disabled=false}
 }
 function add(pid){
  const v=sel(pid),p=D.products.find(x=>x.id==pid);if(!v)return;
@@ -33,15 +36,23 @@ function bar(){
 function rm(id){delete cart[id];bar();Object.keys(cart).length?co():$('#dlg').close()}
 function co(){
  const n=Object.values(cart),t=n.reduce((s,i)=>s+i.v.price*i.q,0);
- $('#dlg').innerHTML=`<h3>Pesanan</h3>${n.map(i=>`<div>${esc(i.name)} x${i.q} = ${rp(i.v.price*i.q)} <button style="width:auto;background:#d33" onclick=rm(${i.v.id})>x</button></div>`).join('')}<p><b>Total ${rp(t)}</b></p><input id=nm placeholder="Nama"><input id=hp placeholder="No. HP/WA" inputmode=tel><p>Scan QRIS dan bayar sesuai total:</p><img src=qris.png style="max-width:100%"><p>Upload bukti bayar:</p><input id=pf type=file accept=image/*><button onclick=send()>Kirim pesanan</button><button style="background:#888" onclick="$('#dlg').close()">Tutup</button>`;
+ $('#dlg').innerHTML=`<h3>Pesanan</h3>${n.map(i=>`<div>${esc(i.name)} x${i.q} = ${rp(i.v.price*i.q)} <button style="width:auto;background:#d33" onclick=rm(${i.v.id})>x</button></div>`).join('')}<p><b>Total ${rp(t)}</b></p><input id=nm placeholder="Nama"><input id=hp placeholder="No. HP/WA" inputmode=tel><p>Scan QRIS dan bayar sesuai total:</p>${D.qris?`<img src="${esc(D.qris)}" style="max-width:100%">`:'<p><i>QRIS belum diatur penjual.</i></p>'}<p>Upload bukti bayar:</p><input id=pf type=file accept=image/*><button id=sd onclick=send()>Kirim pesanan</button><button class=gr onclick="$('#dlg').close()">Tutup</button>`;
  $('#dlg').showModal();
 }
 async function send(){
- const nm=$('#nm').value.trim(),hp=$('#hp').value.trim(),f=$('#pf').files[0];
+ if(sending)return;
+ const nm=$('#nm').value.trim(),hp=$('#hp').value.trim(),f=$('#pf').files[0],b=$('#sd');
  if(!nm||!hp||!f)return alert('Isi nama, nomor HP, dan upload bukti bayar.');
- const proof=await img(f,900);
- const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nm,phone:hp,proof,items:Object.values(cart).map(i=>({variant_id:i.v.id,qty:i.q}))})});
- const j=await r.json();if(!r.ok)return alert(j.error);
- cart={};bar();$('#dlg').innerHTML=`<h3>Pesanan diterima</h3><p>Nomor pesanan #${j.id}, total ${rp(j.total)}. Pembayaranmu sedang kami cek.</p><button onclick="$('#dlg').close()">Tutup</button>`;
+ sending=true;b.disabled=true;b.textContent='Mengirim...';
+ try{
+  const proof=await img(f,800);
+  const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nm,phone:hp,proof,items:Object.values(cart).map(i=>({variant_id:i.v.id,qty:i.q}))})});
+  const j=await r.json();
+  if(!r.ok){alert(j.error);if(r.status===409){cart={};bar();$('#dlg').close();loadD()}return}
+  cart={};bar();loadD();const wa=D&&D.wa;
+  $('#dlg').innerHTML=`<h3>Pesanan diterima ✅</h3><p>Nomor pesanan <b>#${j.id}</b>. Pembayaranmu sedang kami cek.</p>${wa?`<p>Kamu akan diarahkan ke grup WhatsApp dalam <b id=cd>3</b> detik…</p><a href="${esc(wa)}"><button>Gabung grup sekarang</button></a>`:''}<button class=gr onclick="$('#dlg').close()">Tutup</button>`;
+  if(wa){let n=3;const t=setInterval(()=>{n--;const c=$('#cd');if(c)c.textContent=n;if(n<=0){clearInterval(t);location.href=wa}},1000)}
+ }catch(e){alert('Koneksi bermasalah, coba lagi.')}
+ finally{sending=false;if(b){b.disabled=false;b.textContent='Kirim pesanan'}}
 }
 </script>
