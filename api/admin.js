@@ -1,6 +1,6 @@
 const {db,isAdmin}=require('./_lib');
 const {syncOrder}=require('./_sheet');
-const T=['clusters','products'],OF='id,created_at,name,phone,items,status';
+const T=['clusters','products'],OF='id,created_at,name,phone,items,status,prodi,gugus';
 module.exports=async(req,res)=>{
  if(!isAdmin(req))return res.status(401).json({error:'Password salah'});
  if(req.method==='GET'){
@@ -46,16 +46,16 @@ module.exports=async(req,res)=>{
   const {data:o}=await q.select(OF).single();
   if(!o)return res.json({ok:true});
   if(!lunas)await Promise.all(o.items.map(l=>db.rpc('add_stock',{vid:l.variant_id,q:l.qty}))); // kembalikan stok
-  let sheet='ok';
-  try{await syncOrder(o);await db.from('orders').update({sheet_ok:true}).eq('id',id)}catch(e){sheet='gagal';await db.from('orders').update({sheet_ok:false}).eq('id',id)}
-  return res.json({ok:true,sheet});
+  let sheet='ok',err='';
+  try{await syncOrder(o);await db.from('orders').update({sheet_ok:true}).eq('id',id)}catch(e){sheet='gagal';err=String(e.message||e).slice(0,300);await db.from('orders').update({sheet_ok:false}).eq('id',id)}
+  return res.json({ok:true,sheet,err});
  }
  if(a==='resync'){
   const {data:os}=await db.from('orders').select(OF).eq('sheet_ok',false).order('id').limit(10);
-  let ok=0,fail=0;
-  for(const o of os||[]){try{await syncOrder(o);await db.from('orders').update({sheet_ok:true}).eq('id',o.id);ok++}catch(e){fail++}}
+  let ok=0,fail=0,err='';
+  for(const o of os||[]){try{await syncOrder(o);await db.from('orders').update({sheet_ok:true}).eq('id',o.id);ok++}catch(e){fail++;err=String(e.message||e).slice(0,300)}}
   const {count}=await db.from('orders').select('id',{count:'exact',head:true}).eq('sheet_ok',false);
-  return res.json({ok,fail,left:count||0});
+  return res.json({ok,fail,left:count||0,err});
  }
  res.status(400).json({error:'Aksi tidak dikenal'});
 };
