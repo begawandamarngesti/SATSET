@@ -44,7 +44,7 @@ function edit(id,cid){E={p:id?{...S.products.find(x=>x.id==id)}:{cluster_id:cid,
  // isi harga dasar = harga termurah supaya tidak mulai dari nol
  const pr=E.vs.map(v=>v.price).filter(Boolean);if(pr.length)E.bp=Math.min(...pr);
  render()}
-function sync(){if($('#n')){E.p.name=$('#n').value;E.p.description=$('#d').value;E.p.cluster_id=+$('#cl').value;E.p.active=$('#ac').checked}}
+function sync(){if($('#n')){E.p.name=$('#n').value;E.p.description=$('#d').value;E.p.cluster_id=+$('#cl').value;E.p.active=$('#ac').checked;document.querySelectorAll('[data-vi]').forEach(el=>{const v=E.vs[+el.dataset.vi];if(!v)return;const f=el.dataset.f;v[f]=f==='active'?el.checked:(+el.value||0)})}}
 const AT=[['model','Model'],['size','Ukuran'],['color','Warna']];
 function addons(){
  const out=AT.map(([k,l])=>{const o=[...new Set(E.vs.map(v=>v[k]).filter(Boolean))];return o.length?`<div class=sm style="margin-top:6px">Tambahan harga ${l}:</div>`+o.map(x=>`<span class=tg>${esc(x)} +<input type=number placeholder=0 data-k="${esc(k+':'+x)}" value="${E.ao[k+':'+x]||''}" onchange="E.ao[this.dataset.k]=+this.value||0"></span>`).join(''):''}).join('');
@@ -52,19 +52,21 @@ function addons(){
 }
 function editor(){
  return `<div class=c><input id=n placeholder="Nama produk" value="${esc(E.p.name)}"><select id=cl>${S.clusters.map(c=>`<option value=${c.id} ${c.id==E.p.cluster_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><br><textarea id=d placeholder=Deskripsi style="width:95%">${esc(E.p.description)}</textarea><div>${E.p.image||E.p.preview?`<img src="${esc(E.p.image||E.p.preview)}">`:''}<input type=file accept=image/* onchange=pic(this)></div><div class=sm style="margin-top:6px">Tabel panduan ukuran (opsional):</div><div>${E.p.size||E.p.sizePrev?`<img src="${esc(E.p.size||E.p.sizePrev)}" style="max-width:200px">`:''}<input type=file accept=image/* onchange=picSize(this)></div><label><input type=checkbox id=ac ${E.p.active?'checked':''}> Tampil di toko</label></div>
-<div class=c><b>1. Buat kombinasi</b> <span class=sm>(pisahkan dengan koma, kosongkan yang tidak perlu)</span><br><input id=m placeholder="Model: Pendek,Panjang"><input id=s placeholder="Ukuran: M,L,XL"><input id=w placeholder="Warna: Hitam,Putih"><button onclick=gen()>Buat kombinasi</button></div>
+<div class=c><b>1. Buat kombinasi</b> <span class=sm>(pisahkan dengan koma, kosongkan yang tidak perlu)</span><br><input id=m placeholder="Model: Pendek,Panjang"><input id=s placeholder="Ukuran: M,L,XL"><input id=w placeholder="Warna: Hitam,Putih"><button onclick=gen()>Buat kombinasi</button><button class=g onclick=noVar()>Produk tanpa pilihan</button></div>
 <div class=c><b>2. Atur harga massal</b><div class=row>Harga dasar <input type=number id=bp value="${E.bp||''}" placeholder="mis. 75000" onchange="E.bp=+this.value||0"></div>${addons()||'<div class=sm>Buat kombinasi dulu.</div>'}<div class=row style="margin-top:6px"><button onclick=applyPrice()>Terapkan harga ke semua baris</button>Stok semua <input type=number id=bs placeholder="mis. 20" style="width:90px"><button class=g onclick=applyStock()>Set stok</button></div><div class=sm>Harga baris = harga dasar + tambahan model + ukuran + warna. Setelah itu tiap baris masih bisa diedit manual.</div></div>
-<div class=c><b>3. Daftar varian</b> (${E.vs.length})<div style="overflow-x:auto"><table><tr><th>Model<th>Ukuran<th>Warna<th>Harga<th>Stok<th>Aktif<th>${E.vs.map((v,i)=>`<tr><td>${esc(v.model)}<td>${esc(v.size)}<td>${esc(v.color)}<td><input type=number placeholder=Harga value=${v.price||''} onchange="E.vs[${i}].price=+this.value"><td><input type=number value=${v.stock} onchange="E.vs[${i}].stock=+this.value"><td><input type=checkbox ${v.active?'checked':''} onchange="E.vs[${i}].active=this.checked"><td><button class=r onclick=rmv(${i})>x</button>`).join('')}</table></div></div>
+<div class=c><b>3. Daftar varian</b> (${E.vs.length})<div style="overflow-x:auto"><table><tr><th>Model<th>Ukuran<th>Warna<th>Harga<th>Stok<th>Aktif<th>${E.vs.map((v,i)=>`<tr><td>${v.model||v.size||v.color?esc(v.model):'<i class=sm>(tanpa pilihan)</i>'}<td>${esc(v.size)}<td>${esc(v.color)}<td><input type=number placeholder=Harga data-vi=${i} data-f=price value=${v.price||''} ${v.price>0?'':'style="border-color:#d33"'}><td><input type=number data-vi=${i} data-f=stock value=${v.stock}><td><input type=checkbox data-vi=${i} data-f=active ${v.active?'checked':''}><td><button class=r onclick=rmv(${i})>x</button>`).join('')}</table></div></div>
 <div class=sticky><button id=sv onclick=save()>Simpan</button><button class=g onclick="E=null;render()">Batal</button>${E.p.id?`<button class=r onclick=delP()>Hapus produk</button>`:''}</div>`;
 }
 async function picSize(el){if(!el.files[0])return;sync();E.p.size=await img(el.files[0],1000,.85);render()}
 async function pic(el){if(!el.files[0])return;sync();E.p.image=await img(el.files[0],700);render()}
 function gen(){
  sync();const L=q=>$(q).value.split(',').map(x=>x.trim()).filter(Boolean),M=L('#m'),Z=L('#s'),W=L('#w');
+ if(!M.length&&!Z.length&&!W.length)return alert('Isi minimal salah satu: model, ukuran, atau warna.\nUntuk produk tanpa pilihan (1 harga saja), klik tombol "Produk tanpa pilihan".');
  for(const m of M.length?M:[''])for(const s of Z.length?Z:[''])for(const w of W.length?W:[''])
   if(!E.vs.some(v=>(v.model||'')==m&&(v.size||'')==s&&(v.color||'')==w))E.vs.push({model:m||null,size:s||null,color:w||null,price:0,stock:99,active:true});
  render();
 }
+function noVar(){sync();if(E.vs.some(v=>!v.model&&!v.size&&!v.color))return;E.vs.push({model:null,size:null,color:null,price:0,stock:99,active:true});render()}
 function applyPrice(){sync();E.bp=+$('#bp').value||0;if(!E.bp)return alert('Isi harga dasar dulu.');
  E.vs.forEach(v=>v.price=E.bp+(E.ao['model:'+v.model]||0)+(E.ao['size:'+v.size]||0)+(E.ao['color:'+v.color]||0));render()}
 function applyStock(){sync();const n=$('#bs').value;if(n==='')return;E.vs.forEach(v=>v.stock=Math.max(0,+n||0));render()}
@@ -72,7 +74,8 @@ function rmv(i){sync();const v=E.vs.splice(i,1)[0];if(v.id)E.del.push(v.id);rend
 async function delP(){if(!confirm('Hapus produk ini beserta semua variannya?'))return;await api({a:'del',t:'products',id:E.p.id});E=null;load()}
 async function save(){
  if(busy)return;sync();if(!E.p.name)return alert('Isi nama produk.');
- if(E.vs.some(v=>!(v.price>0)&&v.active)&&!confirm('Ada varian aktif dengan harga 0. Tetap simpan?'))return;
+ if(!E.vs.length)return alert('Belum ada varian. Buat kombinasi dulu, atau klik "Produk tanpa pilihan".');
+ if(E.vs.some(v=>v.active&&!(v.price>0)))return alert('Masih ada varian aktif dengan harga 0 (kolom bergaris merah). Isi harganya atau hapus barisnya.');
  busy=true;$('#sv').disabled=true;$('#sv').textContent='Menyimpan...';
  try{
   const {id,cluster_id,name,description,active}=E.p,row={id,cluster_id,name,description,active};

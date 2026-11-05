@@ -12,7 +12,7 @@ function draw(){
  $('#app').innerHTML=D.clusters.map(c=>{const ps=D.products.filter(p=>p.cluster_id==c.id);return ps.length?`<details open><summary>${esc(c.name)}</summary><div class=g>${ps.map(card).join('')}</div></details>`:''}).join('')||'Belum ada produk.';
  D.products.forEach(p=>upd(p.id));bar();
 }
-function range(vs){const x=vs.filter(v=>v.stock>0).map(v=>v.price);if(!x.length)return '';const a=Math.min(...x),b=Math.max(...x);return a==b?rp(a):rp(a)+' – '+rp(b)}
+function range(vs){const x=vs.filter(v=>v.stock>0&&v.price>0).map(v=>v.price);if(!x.length)return '';const a=Math.min(...x),b=Math.max(...x);return a==b?rp(a):rp(a)+' – '+rp(b)}
 function card(p){
  const vs=D.variants.filter(v=>v.product_id==p.id);
  return `<div class=k id=p${p.id}>${p.image?`<img loading=lazy src="${esc(p.image)}">`:''}<b>${esc(p.name)}</b><div style="color:#6d28d9;font-size:13px">${range(vs)}</div><p>${esc(p.description)}</p>${p.size_img?`<button class=ln onclick="guide(${p.id})">📏 Panduan ukuran</button>`:''}${A.map(a=>{const o=[...new Set(vs.map(v=>v[a]).filter(Boolean))];return o.length?`<label>${LB[a]}<select data-a=${a} onchange=upd(${p.id})>${o.map(x=>`<option>${esc(x)}</option>`).join('')}</select></label>`:''}).join('')}<label>Jumlah<input type=number min=1 value=1 data-q onchange=upd(${p.id})></label><div class=pr></div><button data-b onclick=add(${p.id})>Tambah ke keranjang</button></div>`;
@@ -22,7 +22,7 @@ function sel(pid){const s={};$('#p'+pid).querySelectorAll('select').forEach(x=>s
 function qty(pid){return Math.max(1,Math.floor(+$('#p'+pid).querySelector('[data-q]').value)||1)}
 function upd(pid){
  const el=$('#p'+pid),v=sel(pid),q=qty(pid),pr=el.querySelector('.pr'),b=el.querySelector('[data-b]');
- if(!v||v.stock<1){pr.textContent=v?'Habis terjual':'Kombinasi tidak tersedia';b.disabled=true}
+ if(!v||v.stock<1||!(v.price>0)){pr.textContent=!v?'Kombinasi tidak tersedia':v.stock<1?'Habis terjual':'Harga belum tersedia';b.disabled=true}
  else{pr.innerHTML=`<b>${rp(v.price)}</b><br>Subtotal ${rp(v.price*q)}${v.stock<=5?`<br><small style="color:#d33">Sisa ${v.stock}</small>`:''}`;b.disabled=false}
 }
 function add(pid){
