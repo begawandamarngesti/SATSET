@@ -1,0 +1,52 @@
+<!doctype html><html lang=id><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Admin</title>
+<style>body{font:15px system-ui;margin:0;background:#f4f4f8;color:#222}main{max-width:900px;margin:auto;padding:12px}.c{background:#fff;border-radius:10px;padding:12px;margin:10px 0}input,select,textarea,button{font:inherit;padding:7px;margin:2px;border:1px solid #ccc;border-radius:6px}button{background:#4f46e5;color:#fff;border:0;cursor:pointer}button.g{background:#888}button.r{background:#d33}table{width:100%;border-collapse:collapse}td{padding:2px}td input[type=number]{width:90px}img{max-width:100px}</style>
+<main id=app></main>
+<script>
+let K=sessionStorage.k||'',S={},E=null,tab='p';
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),rp=n=>'Rp'+(+n).toLocaleString('id-ID');
+const img=(f,w)=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,w/i.width),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',.7))};i.src=URL.createObjectURL(f)});
+async function api(b){
+ const r=await fetch('/api/admin',{method:b?'POST':'GET',headers:{Authorization:'Bearer '+K,'Content-Type':'application/json'},body:b&&JSON.stringify(b)});
+ const j=await r.json();
+ if(r.status===401){K=prompt('Password admin')||'';sessionStorage.k=K;return api(b)}
+ if(!r.ok)alert(j.error);return j;
+}
+async function load(){S=await api();render()}
+function render(){
+ $('#app').innerHTML=`<button onclick="tab='p';E=null;render()">Produk</button><button onclick="tab='o';render()">Pesanan</button>`+(tab==='o'?orders():E?editor():list());
+}
+function list(){
+ return `<div class=c><input id=cn placeholder="Nama klaster"><button onclick=addC()>Tambah klaster</button></div>`+S.clusters.map(c=>`<div class=c><b>${esc(c.name)}</b> <button onclick="edit(0,${c.id})">Tambah produk</button> <button class=r onclick=delC(${c.id})>Hapus klaster</button>${S.products.filter(p=>p.cluster_id==c.id).map(p=>`<div>${esc(p.name)} <button class=g onclick=edit(${p.id})>Edit</button></div>`).join('')}</div>`).join('');
+}
+async function addC(){const n=$('#cn').value.trim();if(!n)return;await api({a:'save',t:'clusters',row:{name:n,sort:S.clusters.length}});load()}
+async function delC(id){if(confirm('Hapus klaster beserta produknya?')){await api({a:'del',t:'clusters',id});load()}}
+function edit(id,cid){E={p:id?{...S.products.find(x=>x.id==id)}:{cluster_id:cid,active:true},vs:S.variants.filter(v=>v.product_id==id).map(v=>({...v})),del:[]};render()}
+function sync(){if($('#n')){E.p.name=$('#n').value;E.p.description=$('#d').value;E.p.cluster_id=+$('#cl').value;E.p.active=$('#ac').checked}}
+function editor(){
+ return `<div class=c><input id=n placeholder="Nama produk" value="${esc(E.p.name)}"><select id=cl>${S.clusters.map(c=>`<option value=${c.id} ${c.id==E.p.cluster_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><br><textarea id=d placeholder=Deskripsi style="width:95%">${esc(E.p.description)}</textarea><div>${E.p.image?`<img src="${esc(E.p.image)}">`:''}<input type=file accept=image/* onchange=pic(this)></div><label><input type=checkbox id=ac ${E.p.active?'checked':''}> Tampil di toko</label></div>
+<div class=c><b>Kombinasi harga</b> (pisahkan dengan koma)<br><input id=m placeholder="Model: Pendek,Panjang"><input id=s placeholder="Ukuran: M,L,XL"><input id=w placeholder="Warna: Hitam,Putih"><button onclick=gen()>Buat kombinasi</button>
+<table>${E.vs.map((v,i)=>`<tr><td>${esc(v.model)}<td>${esc(v.size)}<td>${esc(v.color)}<td><input type=number placeholder=Harga value=${v.price||''} onchange="E.vs[${i}].price=+this.value"><td><input type=number value=${v.stock} onchange="E.vs[${i}].stock=+this.value"><td><input type=checkbox ${v.active?'checked':''} onchange="E.vs[${i}].active=this.checked"><td><button class=r onclick=rmv(${i})>x</button>`).join('')}</table><small>Kolom: harga, stok, aktif.</small></div>
+<button onclick=save()>Simpan</button><button class=g onclick="E=null;render()">Batal</button>`;
+}
+async function pic(el){sync();E.p.image=await img(el.files[0],700);render()}
+function gen(){
+ sync();const L=q=>$(q).value.split(',').map(x=>x.trim()).filter(Boolean),M=L('#m'),Z=L('#s'),W=L('#w');
+ for(const m of M.length?M:[''])for(const s of Z.length?Z:[''])for(const w of W.length?W:[''])
+  if(!E.vs.some(v=>(v.model||'')==m&&(v.size||'')==s&&(v.color||'')==w))E.vs.push({model:m||null,size:s||null,color:w||null,price:0,stock:99,active:true});
+ render();
+}
+function rmv(i){sync();const v=E.vs.splice(i,1)[0];if(v.id)E.del.push(v.id);render()}
+async function save(){
+ sync();if(!E.p.name)return alert('Isi nama produk.');
+ const {id,cluster_id,name,description,image,active}=E.p;
+ const p=await api({a:'save',t:'products',row:{id,cluster_id,name,description,image,active}});if(!p.id)return;
+ for(const d of E.del)await api({a:'del',t:'variants',id:d});
+ for(const v of E.vs)await api({a:'save',t:'variants',row:{...v,product_id:p.id}});
+ E=null;load();
+}
+function orders(){
+ return S.orders.map(o=>`<div class=c><b>#${o.id}</b> ${esc(o.name)}, ${esc(o.phone)}<br>${o.items.map(i=>esc(i.name)+' x'+(+i.qty)).join('<br>')}<br><b>${rp(o.total)}</b> (${esc(o.status)})<br><img src="${esc(o.proof)}">${o.status!=='lunas'?`<br><button onclick=paid(${o.id})>Tandai lunas</button>`:''}</div>`).join('')||'<p>Belum ada pesanan.</p>';
+}
+async function paid(id){const r=await api({a:'paid',id});if(r.sheet==='gagal')alert('Status tersimpan, tapi gagal menulis ke Google Sheets. Cek pengaturannya.');load()}
+load();
+</script>
