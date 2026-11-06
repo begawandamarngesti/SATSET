@@ -34,7 +34,7 @@ summary{font-weight:700;font-size:18px;padding:10px 0;cursor:pointer;color:var(-
 .cb{background:linear-gradient(90deg,#1b4fa8,#3b6ae0)!important;font-size:16px;font-weight:700;padding:12px!important;margin-top:6px!important;box-shadow:0 4px 12px #1b4fa855}
 .opt{margin-top:8px;padding:10px;background:var(--bl);border-radius:10px}
 .cbt{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.chat{flex-wrap:wrap}
-.ckbtn{font-weight:700;white-space:nowrap}
+.ckbtn{font-weight:700;white-space:nowrap}.ckdl{width:100%;background:#16a34a;font-weight:700;padding:10px}
 #ckd{max-width:760px;width:96%;max-height:90vh;padding:14px}#ckd[open]{display:flex;flex-direction:column;gap:6px}
 .ckh{display:flex;justify-content:space-between;align-items:center;color:#1b4fa8;font-size:17px}.ckb{overflow:auto;flex:1}.lg{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}
 .ct{width:100%;border-collapse:collapse;font-size:14px}.ct th{background:#1b4fa8;color:#fff;text-align:left;padding:6px;position:sticky;top:0}.ct td{padding:6px;border-bottom:1px solid #e3e9fb}
@@ -57,7 +57,7 @@ dialog{max-width:420px;width:92%;border-radius:12px;border:0}dialog h3{color:var
 <div id=list>Memuat...</div>
 </main></div>
 <div id=bar></div><dialog id=dlg></dialog>
-<dialog id=ckd><div class=ckh><b>✅ Cek barang wajib</b><button class=gr style="width:auto" onclick="$('#ckd').close()">Tutup</button></div><input id=cq placeholder="🔍 Cari nama barang..." oninput=renderCek()><div class=sm id=cp></div><div class=lg><span class="pl yes">✔ Disediakan Satset</span> <span class="pl no">✖ Bawa sendiri</span></div><div class=ckb id=ctb></div></dialog>
+<dialog id=ckd><div class=ckh><b>✅ Cek barang wajib</b><button class=gr style="width:auto" onclick="$('#ckd').close()">Tutup</button></div><button class=ckdl onclick=dlCek()>⬇️ Download list barangmu (PNG)</button><input id=cq placeholder="🔍 Cari nama barang..." oninput=renderCek()><div class=sm id=cp></div><div class=lg><span class="pl yes">✔ SATSET MENYEDIAKAN</span> <span class="pl no">✖ Bawa sendiri</span></div><div class=ckb id=ctb></div></dialog>
 <script>
 /* ===== DAFTAR BARANG WAJIB =====
  Isi satu baris per barang, format:  Klaster|Nama barang|1 atau 0
@@ -68,9 +68,9 @@ Dokumen & Ibadah|Kartu Asuransi Kesehatan/BPJS/Bukti Pengurusan BPJS dan kartu i
 Dokumen & Ibadah|Pas foto formal 2x3 latar belakang merah|0
 Dokumen & Ibadah|Kitab suci|1
 Dokumen & Ibadah|Alat ibadah|0
-Pakaian & Aksesoris|Kemeja putih|0
-Pakaian & Aksesoris|Kemeja biru PDH, polos|0
-Pakaian & Aksesoris|Atasan batik|0
+Pakaian & Aksesoris|Kemeja putih|1
+Pakaian & Aksesoris|Kemeja biru PDH, polos|1
+Pakaian & Aksesoris|Atasan batik|1
 Pakaian & Aksesoris|Celana panjang (bagi laki-laki)|0
 Pakaian & Aksesoris|Rok panjang (bagi perempuan)|0
 Pakaian & Aksesoris|Ikat pinggang|0
@@ -188,9 +188,40 @@ function renderCek(){
  CEK.forEach((x,i)=>{
   if(q&&!(x.n.toLowerCase().includes(q)||x.k.toLowerCase().includes(q)))return;
   if(x.k!==cur){cur=x.k;h+=`<tr class=kl><td colspan=4>${esc(x.k)}</tr>`}
-  h+=`<tr class="${x.s?'sy':''}"><td>${x.no}<td>${esc(x.n)}<td>${x.s?'<span class="pl yes">✔ Disediakan</span>':'<span class="pl no">✖ Bawa sendiri</span>'}<td style="text-align:center"><input type=checkbox ${CK[ckKey(x)]?'checked':''} onchange="tgk(${i},this.checked)"></tr>`;rows++;
+  h+=`<tr class="${x.s?'sy':''}"><td>${x.no}<td>${esc(x.n)}<td>${x.s?'<span class="pl yes">✔ SATSET MENYEDIAKAN</span>':'<span class="pl no">✖ Bawa sendiri</span>'}<td style="text-align:center"><input type=checkbox ${CK[ckKey(x)]?'checked':''} onchange="tgk(${i},this.checked)"></tr>`;rows++;
  });
- box.innerHTML=rows?`<table class=ct><tr><th>No<th>Jenis Barang<th>Disediakan Satset?<th>Ceklis</tr>${h}</table>`:'<p>Tidak ada barang yang cocok.</p>';
+ box.innerHTML=rows?`<table class=ct><tr><th>No<th>Jenis Barang<th>SATSET MENYEDIAKAN?<th>Ceklis</tr>${h}</table>`:'<p>Tidak ada barang yang cocok.</p>';
+}
+function dlCek(){
+ const W=800,S=2,P=28,LH=26,done=[],todo=[];
+ CEK.forEach(x=>(CK[ckKey(x)]?done:todo).push(x));
+ const items=arr=>{const g=[];let c=null;arr.forEach(x=>{if(x.k!==c){c=x.k;g.push({h:x.k})}g.push({n:x.n,s:x.s})});return g};
+ const sections=[['SUDAH ('+done.length+')',items(done),'#16a34a'],['BELUM ('+todo.length+')',items(todo),'#c2410c']];
+ const m=document.createElement('canvas').getContext('2d');m.font='15px system-ui,sans-serif';
+ const mw=r=>W-2*P-40-(r.s?190:0);
+ const wrap=(t,w)=>{const o=[];let l='';t.split(' ').forEach(wd=>{const a=l?l+' '+wd:wd;if(m.measureText(a).width>w&&l){o.push(l);l=wd}else l=a});if(l)o.push(l);return o};
+ let H=P+70;
+ sections.forEach(([t,g])=>{H+=40+18;if(!g.length)H+=LH;g.forEach(r=>{H+=r.h?LH+6:wrap(r.n,mw(r)).length*LH+4})});
+ H+=P;
+ const c=document.createElement('canvas');c.width=W*S;c.height=H*S;const x=c.getContext('2d');x.scale(S,S);
+ x.fillStyle='#fff';x.fillRect(0,0,W,H);
+ x.fillStyle='#1b4fa8';x.fillRect(0,0,W,64);
+ x.fillStyle='#fff';x.font='bold 22px system-ui,sans-serif';x.fillText('SATSET · List Barangmu',P,30);
+ x.font='13px system-ui,sans-serif';x.fillText('Asrama PKN STAN 2026/2027 · '+new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}),P,50);
+ let y=P+70;
+ sections.forEach(([t,g,col])=>{
+  x.fillStyle=col;x.font='bold 18px system-ui,sans-serif';x.fillText(t,P,y);y+=14;
+  x.strokeStyle=col;x.lineWidth=2;x.beginPath();x.moveTo(P,y);x.lineTo(W-P,y);x.stroke();y+=26;
+  if(!g.length){x.fillStyle='#667';x.font='15px system-ui,sans-serif';x.fillText('-',P,y);y+=LH}
+  g.forEach(r=>{
+   if(r.h){x.fillStyle='#1b4fa8';x.font='bold 15px system-ui,sans-serif';x.fillText(r.h,P,y);y+=LH+6;return}
+   x.font='15px system-ui,sans-serif';x.fillStyle=col;x.fillText(col==='#16a34a'?'✔':'☐',P+4,y);
+   x.fillStyle='#1c2540';const ls=wrap(r.n,mw(r));
+   ls.forEach((l,i)=>x.fillText(l,P+34,y+i*LH));
+   if(r.s){x.font='bold 12px system-ui,sans-serif';const tw=x.measureText('SATSET MENYEDIAKAN').width+16,tx=W-P-tw;x.fillStyle='#1b4fa8';x.fillRect(tx,y-14,tw,20);x.fillStyle='#fff';x.fillText('SATSET MENYEDIAKAN',tx+8,y)}
+   y+=ls.length*LH+4});
+  y+=18});
+ c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='list-barang-satset.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)},'image/png');
 }
 function tgk(i,v){const k=ckKey(CEK[i]);if(v)CK[k]=1;else delete CK[k];try{localStorage.setItem('satset_ck',JSON.stringify(CK))}catch(e){}$('#cp').textContent=ckDone()+' dari '+CEK.length+' barang sudah kamu ceklis'}
 function start(){
