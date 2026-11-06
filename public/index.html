@@ -27,6 +27,7 @@ summary{font-weight:700;font-size:18px;padding:10px 0;cursor:pointer;color:var(-
 .g{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
 .k{background:#fff;border-radius:12px;padding:10px;border:1px solid #dbe5ff;box-shadow:0 2px 8px #1b4fa81a}
 .k img{width:100%;border-radius:8px}
+.gw{position:relative}.ss{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border-radius:8px;scrollbar-width:none}.ss::-webkit-scrollbar{display:none}.ss img{flex:0 0 100%;width:100%;aspect-ratio:1;object-fit:cover;scroll-snap-align:center;border-radius:0}.gc{position:absolute;right:6px;bottom:6px;background:#0008;color:#fff;font-size:11px;padding:2px 7px;border-radius:10px}.ga{position:absolute;top:50%;transform:translateY(-50%);width:28px!important;height:28px;padding:0;border-radius:50%;background:#0006;font-size:18px;margin:0!important}.ga.l{left:4px}.ga.r{right:4px}
 .hot{font-size:12px;color:#c2410c;font-weight:600;min-height:0}
 label{display:block;font-size:12px;color:#556}
 select,input{font:inherit;padding:7px;border:1px solid #bcc9ee;border-radius:6px;width:100%;margin:2px 0}
@@ -66,8 +67,12 @@ function draw(){
 function range(vs){const x=vs.filter(v=>v.stock>0&&v.price>0).map(v=>v.price);if(!x.length)return '';const a=Math.min(...x),b=Math.max(...x);return a==b?rp(a):rp(a)+' – '+rp(b)}
 function card(p){
  const vs=D.variants.filter(v=>v.product_id==p.id);
- return `<div class=k id=p${p.id}>${p.image?`<img loading=lazy decoding=async src="${esc(p.image)}">`:''}<b>${esc(p.name)}</b><div style="color:#1b4fa8;font-size:13px">${range(vs)}</div><p>${esc(p.description)}</p>${p.size_img?`<button class=ln onclick="guide(${p.id})">📏 Panduan ukuran</button>`:''}${A.map(a=>{const o=[...new Set(vs.map(v=>v[a]).filter(Boolean))];return o.length?`<label>${LB[a]}<select data-a=${a} onchange=upd(${p.id})>${o.map(x=>`<option>${esc(x)}</option>`).join('')}</select></label>`:''}).join('')}<label>Jumlah<input type=number min=1 value=1 data-q onchange=upd(${p.id})></label><div class=pr></div><button data-b onclick=add(${p.id})>Tambah ke keranjang</button></div>`;
+ return `<div class=k id=p${p.id}>${gal(p)}<b>${esc(p.name)}</b><div style="color:#1b4fa8;font-size:13px">${range(vs)}</div><p>${esc(p.description)}</p>${p.size_img?`<button class=ln onclick="guide(${p.id})">📏 Panduan ukuran</button>`:''}${A.map(a=>{const o=[...new Set(vs.map(v=>v[a]).filter(Boolean))];return o.length?`<label>${LB[a]}<select data-a=${a} onchange=upd(${p.id})>${o.map(x=>`<option>${esc(x)}</option>`).join('')}</select></label>`:''}).join('')}<label>Jumlah<input type=number min=1 value=1 data-q onchange=upd(${p.id})></label><div class=pr></div><button data-b onclick=add(${p.id})>Tambah ke keranjang</button></div>`;
 }
+function gal(p){const im=p.images||[];if(!im.length)return '';
+ return `<div class=gw><div class=ss onscroll=gs(this)>${im.map(u=>`<img loading=lazy decoding=async src="${esc(u)}">`).join('')}</div>${im.length>1?`<span class=gc>1/${im.length}</span><button class="ga l" onclick="gm(this,-1)">‹</button><button class="ga r" onclick="gm(this,1)">›</button>`:''}</div>`}
+function gm(b,d){const s=b.parentNode.querySelector('.ss');s.scrollBy({left:d*s.clientWidth,behavior:'smooth'})}
+function gs(s){const c=s.parentNode.querySelector('.gc');if(c)c.textContent=(Math.round(s.scrollLeft/s.clientWidth)+1)+'/'+s.children.length}
 function guide(pid){const p=D.products.find(x=>x.id==pid);$('#dlg').innerHTML=`<h3>Panduan ukuran</h3><img src="${esc(p.size_img)}" style="max-width:100%"><button class=gr onclick="$('#dlg').close()">Tutup</button>`;$('#dlg').showModal()}
 function sel(pid){const s={};$('#p'+pid).querySelectorAll('select').forEach(x=>s[x.dataset.a]=x.value);return D.variants.find(v=>v.product_id==pid&&A.every(a=>!s[a]||v[a]==s[a]))}
 function qty(pid){return Math.max(1,Math.floor(+$('#p'+pid).querySelector('[data-q]').value)||1)}
