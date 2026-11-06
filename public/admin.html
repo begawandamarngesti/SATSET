@@ -8,8 +8,12 @@ table{width:100%;border-collapse:collapse}th{font-size:12px;color:#666;text-alig
 td input[type=number]{width:100px}.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.sm{font-size:12px;color:#666}
 img{max-width:110px;border-radius:6px;display:block}.sticky{position:sticky;bottom:0;background:#f4f4f8;padding:8px 0}
 .tg{background:#eef;padding:6px 8px;border-radius:6px;display:inline-block;margin:2px}.tg input{width:90px}
+@media print{body>*:not(#pdf){display:none!important}#pdf{display:block!important}body{background:#fff}
+#pdf{font:12px system-ui,sans-serif;color:#000}#pdf h2{margin:0 0 4px;color:#1b4fa8}#pdf h3{margin:14px 0 4px;color:#1b4fa8}#pdf table{width:100%;border-collapse:collapse}
+#pdf th{background:#1b4fa8!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:left}#pdf td,#pdf th{border:1px solid #bbb;padding:4px 6px;font-size:12px}}
+#pdf{display:none}
 </style>
-<main id=app>Memuat...</main>
+<main id=app>Memuat...</main><div id=pdf></div>
 <script>
 let K=sessionStorage.k||'',S={clusters:[],products:[],variants:[],settings:{}},O=null,NQ=null,E=null,tab='p',busy=false;
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),rp=n=>'Rp'+(+n||0).toLocaleString('id-ID');
@@ -28,9 +32,9 @@ async function loadOrders(more){
  O.list=O.list.concat(r.orders);O.more=r.orders.length>=40;if(r.counts)O.counts=r.counts;render();
 }
 function setSt(s){O.st=s;loadOrders()}
-function go(t){tab=t;E=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else render()}
+function go(t){tab=t;E=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else if(t==='r')loadRecap();else render()}
 function render(){
- $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():E?editor():list());
+ $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button onclick="go('r')">Rekap</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():tab==='r'?recapView():E?editor():list());
 }
 /* ---------- produk ---------- */
 function list(){
@@ -104,5 +108,26 @@ function settings(){
 }
 async function picQ(el){if(!el.files[0])return;S.settings.wa_link=$('#wa').value;NQ=await img(el.files[0],1000,.92);render()}
 async function saveSet(){const b=$('#ss');b.disabled=true;b.textContent='Menyimpan...';const wa=$('#wa').value.trim();const r=await api({a:'settings',wa_link:wa,qris:NQ});if(r.ok){NQ=null;await load()}else{b.disabled=false;b.textContent='Simpan pengaturan'}}
+/* ---------- rekap ---------- */
+let R=null,RS='';const LBL={model:'Model',size:'Ukuran',color:'Warna'};
+async function loadRecap(){R=null;$('#app').innerHTML='Memuat rekap...';R=await api(null,'?w=recap&status='+RS);render()}
+function setRS(s){RS=s;loadRecap()}
+function recapView(){
+ if(!R||!R.products)return 'Rekap gagal dimuat.';
+ const bd=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class=tg>${esc(k)}: <b>${v}</b></span>`).join('');
+ return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=recapCSV()>Download Excel (CSV)</button><button class=g onclick=recapPDF()>Download PDF</button><div class=sm>${R.orders} pesanan dihitung. Pesanan batal tidak ikut.</div></div>`+
+ (R.products.map(p=>`<div class=c><b>${esc(p.name)}</b> &mdash; <b>${p.qty} unit</b> <span class=sm>${rp(p.rev)}</span>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div class=sm style="margin-top:6px">Per ${LBL[a]}:</div>${bd(p[a])}`:'').join('')}<div class=sm style="margin-top:6px">Per kombinasi:</div>${p.combos.map(c=>`<span class=tg>${esc(c.label)}: <b>${c.qty}</b></span>`).join('')}</div>`).join('')||'<div class=c>Belum ada pesanan.</div>');
+}
+function recapCSV(){
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Produk','Model','Ukuran','Warna','Jumlah']];
+ R.products.forEach(p=>p.combos.forEach(c=>rows.push([p.name,c.model,c.size,c.color,c.qty])));
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='rekap-satset.csv';a.click();
+}
+function recapPDF(){
+ const ln=(o)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>esc(k)+' '+v).join(', ');
+ $('#pdf').innerHTML=`<h2>Rekap Pesanan SATSET</h2><div>${RS==='lunas'?'Lunas saja':'Menunggu + Lunas'} &middot; ${R.orders} pesanan &middot; ${new Date().toLocaleString('id-ID')}</div>`+
+ R.products.map(p=>`<h3>${esc(p.name)} &mdash; ${p.qty} unit</h3>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div>Per ${LBL[a]}: ${ln(p[a])}</div>`:'').join('')}<table style="margin-top:6px"><tr><th>Model<th>Ukuran<th>Warna<th>Jumlah</tr>${p.combos.map(c=>`<tr><td>${esc(c.model)}<td>${esc(c.size)}<td>${esc(c.color)}<td>${c.qty}</tr>`).join('')}</table>`).join('');
+ const t=document.title;document.title='Rekap SATSET';window.print();document.title=t;
+}
 load();
 </script>
