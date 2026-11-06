@@ -28,8 +28,8 @@ module.exports=async(req,res)=>{
    const products=Object.values(P).map(p=>({...p,combos:Object.values(p.combos).sort((a,b)=>b.qty-a.qty)})).sort((a,b)=>b.qty-a.qty);
    return res.json({orders:n,products});
   }
-  const [c,p,v,s]=await Promise.all([db.from('clusters').select('*').order('sort'),db.from('products').select('id,cluster_id,name,description,active,image_v,size_v').order('id'),db.from('variants').select('*').order('id'),db.from('settings').select('key,value').in('key',['wa_link','qris_v'])]);
-  return res.json({clusters:c.data||[],products:p.data||[],variants:v.data||[],settings:Object.fromEntries((s.data||[]).map(x=>[x.key,x.value]))});
+  const [c,p,v,s,im]=await Promise.all([db.from('clusters').select('*').order('sort'),db.from('products').select('id,cluster_id,name,description,active,image_v,size_v').order('id'),db.from('variants').select('*').order('id'),db.from('settings').select('key,value').in('key',['wa_link','qris_v']),db.from('product_images').select('id,product_id,pos').order('pos').order('id')]);
+  return res.json({clusters:c.data||[],products:p.data||[],variants:v.data||[],images:(im&&im.data)||[],settings:Object.fromEntries((s.data||[]).map(x=>[x.key,x.value]))});
  }
  const {a,t,row,id,rows,del,product_id}=req.body||{};
  if(a==='save'&&T.includes(t)){const r=await db.from(t).upsert(row).select('id').single();return r.error?res.status(400).json({error:r.error.message}):res.json(r.data)}
@@ -51,6 +51,20 @@ module.exports=async(req,res)=>{
   if(ins.length)ops.push(db.from('variants').insert(ins));
   const rs=await Promise.all(ops),e=rs.find(x=>x.error);
   return e?res.status(400).json({error:e.error.message}):res.json({ok:true});
+ }
+ if(a==='images'){
+  const pid=+product_id,B=req.body;
+  const add=(B.add||[]).filter(x=>typeof x==='string'&&/^data:image\//.test(x)&&x.length<1.5e6);
+  const delIds=(B.del||[]).map(Number).filter(n=>n>0),order=Array.isArray(B.order)?B.order:[];
+  if(delIds.length){const d=await db.from('product_images').delete().in('id',delIds).eq('product_id',pid);if(d.error)return res.status(400).json({error:d.error.message})}
+  const cnt=await db.from('product_images').select('id',{count:'exact',head:true}).eq('product_id',pid);
+  if(cnt.error)return res.status(400).json({error:cnt.error.message});
+  if((cnt.count||0)+add.length>10)return res.status(400).json({error:'Maksimal 10 foto per produk'});
+  let ids=[];
+  if(add.length){const r=await db.from('product_images').insert(add.map((d,i)=>({product_id:pid,pos:100+i,data:d}))).select('id');if(r.error)return res.status(400).json({error:r.error.message});ids=(r.data||[]).map(x=>x.id).sort((x,y)=>x-y)}
+  const pos=order.map((t,i)=>{const id=typeof t==='string'&&t[0]==='n'?ids[+t.slice(1)]:+t;return id?{id,pos:i}:null}).filter(Boolean);
+  const us=await Promise.all(pos.map(x=>db.from('product_images').update({pos:x.pos}).eq('id',x.id).eq('product_id',pid)));
+  const e=us.find(x=>x.error);return e?res.status(400).json({error:e.error.message}):res.json({ok:true});
  }
  if(a==='paid'||a==='cancel'){
   // klaim atomik: hanya satu request yang bisa mengubah status
