@@ -14,6 +14,20 @@ module.exports=async(req,res)=>{
    return res.json({orders:o.data||[],counts:cnt&&{menunggu:cnt[0].count,lunas:cnt[1].count,batal:cnt[2].count}});
   }
   if(w==='proof'){const o=await db.from('orders').select('proof').eq('id',+req.query.id).single();return res.json({proof:o.data&&o.data.proof})}
+  if(w==='recap'){
+   let q=db.from('orders').select('items').order('id',{ascending:false}).limit(5000);
+   q=req.query.status==='lunas'?q.eq('status','lunas'):q.in('status',['menunggu','lunas']);
+   const r=await q;if(r.error)return res.status(500).json({error:r.error.message});
+   const P={};let n=0;
+   for(const o of r.data||[]){n++;for(const i of o.items||[]){
+    const k=i.pname||i.name,u=+i.qty||0,p=P[k]||(P[k]={name:k,qty:0,rev:0,model:{},size:{},color:{},combos:{}});
+    p.qty+=u;p.rev+=u*(+i.price||0);
+    for(const a of ['model','size','color'])if(i[a])p[a][i[a]]=(p[a][i[a]]||0)+u;
+    const ck=[i.model,i.size,i.color].filter(Boolean).join(' / ')||'Tanpa varian',cc=p.combos[ck]||(p.combos[ck]={label:ck,model:i.model||'',size:i.size||'',color:i.color||'',qty:0});cc.qty+=u;
+   }}
+   const products=Object.values(P).map(p=>({...p,combos:Object.values(p.combos).sort((a,b)=>b.qty-a.qty)})).sort((a,b)=>b.qty-a.qty);
+   return res.json({orders:n,products});
+  }
   const [c,p,v,s]=await Promise.all([db.from('clusters').select('*').order('sort'),db.from('products').select('id,cluster_id,name,description,active,image_v,size_v').order('id'),db.from('variants').select('*').order('id'),db.from('settings').select('key,value').in('key',['wa_link','qris_v'])]);
   return res.json({clusters:c.data||[],products:p.data||[],variants:v.data||[],settings:Object.fromEntries((s.data||[]).map(x=>[x.key,x.value]))});
  }
