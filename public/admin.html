@@ -7,7 +7,7 @@ button{background:#4f46e5;color:#fff;border:0;cursor:pointer}button.g{background
 table{width:100%;border-collapse:collapse}th{font-size:12px;color:#666;text-align:left;padding:2px}td{padding:2px}
 td input[type=number]{width:100px}.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.sm{font-size:12px;color:#666}
 img{max-width:110px;border-radius:6px;display:block}.sticky{position:sticky;bottom:0;background:#f4f4f8;padding:8px 0}
-.tg{background:#eef;padding:6px 8px;border-radius:6px;display:inline-block;margin:2px}.tg input{width:90px}
+.tg{background:#eef;padding:6px 8px;border-radius:6px;display:inline-block;margin:2px}.tg input{width:90px}.gal{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}.th{width:110px}.th img{width:110px;height:110px;object-fit:cover}.th button{padding:4px 8px}
 @media print{body>*:not(#pdf){display:none!important}#pdf{display:block!important}body{background:#fff}
 #pdf{font:12px system-ui,sans-serif;color:#000}#pdf h2{margin:0 0 4px;color:#1b4fa8}#pdf h3{margin:14px 0 4px;color:#1b4fa8}#pdf table{width:100%;border-collapse:collapse}
 #pdf th{background:#1b4fa8!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:left}#pdf td,#pdf th{border:1px solid #bbb;padding:4px 6px;font-size:12px}}
@@ -42,7 +42,7 @@ function list(){
 }
 async function addC(){const n=$('#cn').value.trim();if(!n)return;await api({a:'save',t:'clusters',row:{name:n,sort:S.clusters.length}});load()}
 async function delC(id){if(confirm('Hapus klaster beserta produknya?')){await api({a:'del',t:'clusters',id});load()}}
-function edit(id,cid){E={p:id?{...S.products.find(x=>x.id==id)}:{cluster_id:cid,active:true},vs:S.variants.filter(v=>v.product_id==id).map(v=>({...v})),del:[],bp:0,ao:{}};
+function edit(id,cid){E={p:id?{...S.products.find(x=>x.id==id)}:{cluster_id:cid,active:true},vs:S.variants.filter(v=>v.product_id==id).map(v=>({...v})),del:[],bp:0,ao:{},idel:[],imgs:(S.images||[]).filter(m=>m.product_id==id).map(m=>({id:m.id,url:'/api/img?k=pimg&id='+m.id}))};
  if(id&&E.p.image_v)E.p.preview='/api/img?id='+id+'&v='+E.p.image_v;
  if(id&&E.p.size_v)E.p.sizePrev='/api/img?k=size&id='+id+'&v='+E.p.size_v;
  // isi harga dasar = harga termurah supaya tidak mulai dari nol
@@ -55,14 +55,22 @@ function addons(){
  return out;
 }
 function editor(){
- return `<div class=c><input id=n placeholder="Nama produk" value="${esc(E.p.name)}"><select id=cl>${S.clusters.map(c=>`<option value=${c.id} ${c.id==E.p.cluster_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><br><textarea id=d placeholder=Deskripsi style="width:95%">${esc(E.p.description)}</textarea><div>${E.p.image||E.p.preview?`<img src="${esc(E.p.image||E.p.preview)}">`:''}<input type=file accept=image/* onchange=pic(this)></div><div class=sm style="margin-top:6px">Tabel panduan ukuran (opsional):</div><div>${E.p.size||E.p.sizePrev?`<img src="${esc(E.p.size||E.p.sizePrev)}" style="max-width:200px">`:''}<input type=file accept=image/* onchange=picSize(this)></div><label><input type=checkbox id=ac ${E.p.active?'checked':''}> Tampil di toko</label></div>
+ return `<div class=c><input id=n placeholder="Nama produk" value="${esc(E.p.name)}"><select id=cl>${S.clusters.map(c=>`<option value=${c.id} ${c.id==E.p.cluster_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><br><textarea id=d placeholder=Deskripsi style="width:95%">${esc(E.p.description)}</textarea><div class=sm style="margin-top:6px">Foto produk (${E.imgs.length}/10). Foto pertama jadi foto utama.</div><div class=gal>${E.imgs.map((m,i)=>`<div class=th><img src="${esc(m.url)}">${i?`<button class=g onclick=imgMv(${i})>Jadikan utama</button>`:'<span class=sm>Foto utama</span>'} <button class=r onclick=imgRm(${i})>Hapus</button></div>`).join('')}</div><input type=file accept=image/* multiple onchange=pics(this) ${E.imgs.length>=10?'disabled':''}><div class=sm style="margin-top:6px">Tabel panduan ukuran (opsional):</div><div>${E.p.size||E.p.sizePrev?`<img src="${esc(E.p.size||E.p.sizePrev)}" style="max-width:200px">`:''}<input type=file accept=image/* onchange=picSize(this)></div><label><input type=checkbox id=ac ${E.p.active?'checked':''}> Tampil di toko</label></div>
 <div class=c><b>1. Buat kombinasi</b> <span class=sm>(pisahkan dengan koma, kosongkan yang tidak perlu)</span><br><input id=m placeholder="Model: Pendek,Panjang"><input id=s placeholder="Ukuran: M,L,XL"><input id=w placeholder="Warna: Hitam,Putih"><button onclick=gen()>Buat kombinasi</button><button class=g onclick=noVar()>Produk tanpa pilihan</button></div>
 <div class=c><b>2. Atur harga massal</b><div class=row>Harga dasar <input type=number id=bp value="${E.bp||''}" placeholder="mis. 75000" onchange="E.bp=+this.value||0"></div>${addons()||'<div class=sm>Buat kombinasi dulu.</div>'}<div class=row style="margin-top:6px"><button onclick=applyPrice()>Terapkan harga ke semua baris</button>Stok semua <input type=number id=bs placeholder="mis. 20" style="width:90px"><button class=g onclick=applyStock()>Set stok</button></div><div class=sm>Harga baris = harga dasar + tambahan model + ukuran + warna. Setelah itu tiap baris masih bisa diedit manual.</div></div>
 <div class=c><b>3. Daftar varian</b> (${E.vs.length})<div style="overflow-x:auto"><table><tr><th>Model<th>Ukuran<th>Warna<th>Harga<th>Stok<th>Aktif<th>${E.vs.map((v,i)=>`<tr><td>${v.model||v.size||v.color?esc(v.model):'<i class=sm>(tanpa pilihan)</i>'}<td>${esc(v.size)}<td>${esc(v.color)}<td><input type=number placeholder=Harga data-vi=${i} data-f=price value=${v.price||''} ${v.price>0?'':'style="border-color:#d33"'}><td><input type=number data-vi=${i} data-f=stock value=${v.stock}><td><input type=checkbox data-vi=${i} data-f=active ${v.active?'checked':''}><td><button class=r onclick=rmv(${i})>x</button>`).join('')}</table></div></div>
 <div class=sticky><button id=sv onclick=save()>Simpan</button><button class=g onclick="E=null;render()">Batal</button>${E.p.id?`<button class=r onclick=delP()>Hapus produk</button>`:''}</div>`;
 }
 async function picSize(el){if(!el.files[0])return;sync();E.p.size=await img(el.files[0],1000,.85);render()}
-async function pic(el){if(!el.files[0])return;sync();E.p.image=await img(el.files[0],480,.75);render()}
+async function pics(el){
+ if(!el.files.length)return;sync();
+ const fs=[...el.files].slice(0,10-E.imgs.length);
+ if(el.files.length>fs.length)alert('Maksimal 10 foto per produk. Sisanya diabaikan.');
+ for(const f of fs){const d=await img(f,600,.75);E.imgs.push({data:d,url:d})}
+ el.value='';render();
+}
+function imgRm(i){sync();const m=E.imgs.splice(i,1)[0];if(m.id)E.idel.push(m.id);render()}
+function imgMv(i){sync();E.imgs.unshift(E.imgs.splice(i,1)[0]);render()}
 function gen(){
  sync();const L=q=>$(q).value.split(',').map(x=>x.trim()).filter(Boolean),M=L('#m'),Z=L('#s'),W=L('#w');
  if(!M.length&&!Z.length&&!W.length)return alert('Isi minimal salah satu: model, ukuran, atau warna.\nUntuk produk tanpa pilihan (1 harga saja), klik tombol "Produk tanpa pilihan".');
@@ -87,6 +95,8 @@ async function save(){
   if(E.p.size){row.size_img=E.p.size;row.size_v=Date.now()}
   const p=await api({a:'save',t:'products',row});if(!p.id)return;
   await api({a:'variants',product_id:p.id,rows:E.vs,del:E.del});
+  const add=[],order=[];E.imgs.forEach(m=>{if(m.id)order.push(m.id);else{order.push('n'+add.length);add.push(m.data)}});
+  if(add.length||order.length||E.idel.length){const ri=await api({a:'images',product_id:p.id,add,del:E.idel,order});if(!ri.ok)return}
   E=null;await load();
  }finally{busy=false;if($('#sv')){$('#sv').disabled=false;$('#sv').textContent='Simpan'}}
 }
