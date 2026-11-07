@@ -8,12 +8,14 @@ table{width:100%;border-collapse:collapse}th{font-size:12px;color:#666;text-alig
 td input[type=number]{width:100px}.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.sm{font-size:12px;color:#666}
 img{max-width:110px;border-radius:6px;display:block}.sticky{position:sticky;bottom:0;background:#f4f4f8;padding:8px 0}
 .tg{background:#eef;padding:6px 8px;border-radius:6px;display:inline-block;margin:2px}.tg input{width:90px}.gal{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}.th{width:110px}.th img{width:110px;height:110px;object-fit:cover}.th button{padding:4px 8px}
+#dl{position:fixed;inset:0;background:#0008;display:none;overflow:auto;z-index:9}#dl .box{background:#fff;max-width:900px;margin:16px auto;border-radius:12px;padding:14px}
+.bx{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:8px 0}.bx label{border:2px solid #ddd;border-radius:10px;padding:8px;cursor:pointer;display:block;font-size:13px}.bx label.on{border-color:#4f46e5;background:#eef}
 @media print{body>*:not(#pdf){display:none!important}#pdf{display:block!important}body{background:#fff}
 #pdf{font:12px system-ui,sans-serif;color:#000}#pdf h2{margin:0 0 4px;color:#1b4fa8}#pdf h3{margin:14px 0 4px;color:#1b4fa8}#pdf table{width:100%;border-collapse:collapse}
 #pdf th{background:#1b4fa8!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:left}#pdf td,#pdf th{border:1px solid #bbb;padding:4px 6px;font-size:12px}}
 #pdf{display:none}
 </style>
-<main id=app>Memuat...</main><div id=pdf></div>
+<main id=app>Memuat...</main><div id=pdf></div><div id=dl></div>
 <script>
 let K=sessionStorage.k||'',S={clusters:[],products:[],variants:[],settings:{}},O=null,NQ=null,E=null,tab='p',busy=false;
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),rp=n=>'Rp'+(+n||0).toLocaleString('id-ID');
@@ -38,10 +40,15 @@ function render(){
 }
 /* ---------- produk ---------- */
 function list(){
- return `<div class=c><input id=cn placeholder="Nama klaster"><button onclick=addC()>Tambah klaster</button></div>`+S.clusters.map(c=>`<div class=c><b>${esc(c.name)}</b> <button onclick="edit(0,${c.id})">Tambah produk</button> <button class=r onclick=delC(${c.id})>Hapus klaster</button>${S.products.filter(p=>p.cluster_id==c.id).map(p=>{const vs=S.variants.filter(v=>v.product_id==p.id),pr=vs.map(v=>v.price);return `<div style="margin-top:6px">${esc(p.name)} <span class=sm>${vs.length} varian${pr.length?' · '+rp(Math.min(...pr))+(Math.max(...pr)>Math.min(...pr)?' – '+rp(Math.max(...pr)):''):''}${p.active?'':' · disembunyikan'}</span> <button class=g onclick=edit(${p.id})>Edit</button></div>`}).join('')}</div>`).join('');
+ return `<div class=c><input id=cn placeholder="Nama klaster"><button onclick=addC()>Tambah klaster</button></div>`+S.clusters.map(c=>`<div class=c><b>${esc(c.name)}</b> <button onclick="edit(0,${c.id})">Tambah produk</button> <button class=r onclick=delC(${c.id})>Hapus klaster</button>${S.products.filter(p=>p.cluster_id==c.id).map(p=>{const vs=S.variants.filter(v=>v.product_id==p.id),pr=vs.map(v=>v.price);return `<div style="margin-top:6px">${esc(p.name)} <span class=sm>${vs.length} varian${pr.length?' · '+rp(Math.min(...pr))+(Math.max(...pr)>Math.min(...pr)?' – '+rp(Math.max(...pr)):''):''}${p.active?'':' · disembunyikan'}</span> <button class=g onclick=edit(${p.id})>Edit</button> <button class="${p.active?'':'r'}" onclick=tgl(${p.id})>${p.active?'Sembunyikan':'Tampilkan'}</button></div>`}).join('')}</div>`).join('');
 }
 async function addC(){const n=$('#cn').value.trim();if(!n)return;await api({a:'save',t:'clusters',row:{name:n,sort:S.clusters.length}});load()}
 async function delC(id){if(confirm('Hapus klaster beserta produknya?')){await api({a:'del',t:'clusters',id});load()}}
+async function tgl(id){
+ const p=S.products.find(x=>x.id==id);
+ await api({a:'save',t:'products',row:{id:p.id,cluster_id:p.cluster_id,name:p.name,description:p.description,active:!p.active}});
+ load();
+}
 function edit(id,cid){E={p:id?{...S.products.find(x=>x.id==id)}:{cluster_id:cid,active:true},vs:S.variants.filter(v=>v.product_id==id).map(v=>({...v})),del:[],bp:0,ao:{},idel:[],imgs:(S.images||[]).filter(m=>m.product_id==id).map(m=>({id:m.id,url:'/api/img?k=pimg&id='+m.id}))};
  if(id&&E.p.image_v)E.p.preview='/api/img?id='+id+'&v='+E.p.image_v;
  if(id&&E.p.size_v)E.p.sizePrev='/api/img?k=size&id='+id+'&v='+E.p.size_v;
@@ -125,18 +132,65 @@ function setRS(s){RS=s;loadRecap()}
 function recapView(){
  if(!R||!R.products)return 'Rekap gagal dimuat.';
  const bd=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class=tg>${esc(k)}: <b>${v}</b></span>`).join('');
- return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=recapCSV()>Download Excel (CSV)</button><button class=g onclick=recapPDF()>Download PDF</button><div class=sm>${R.orders} pesanan dihitung. Pesanan batal tidak ikut.</div></div>`+
+ return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openDl()>Download rekap...</button><div class=sm>${R.orders} pesanan dihitung. Pesanan batal tidak ikut.</div></div>`+
  (R.products.map(p=>`<div class=c><b>${esc(p.name)}</b> &mdash; <b>${p.qty} unit</b> <span class=sm>${rp(p.rev)}</span>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div class=sm style="margin-top:6px">Per ${LBL[a]}:</div>${bd(p[a])}`:'').join('')}<div class=sm style="margin-top:6px">Per kombinasi:</div>${p.combos.map(c=>`<span class=tg>${esc(c.label)}: <b>${c.qty}</b></span>`).join('')}</div>`).join('')||'<div class=c>Belum ada pesanan.</div>');
 }
-function recapCSV(){
- const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Produk','Model','Ukuran','Warna','Jumlah']];
- R.products.forEach(p=>p.combos.forEach(c=>rows.push([p.name,c.model,c.size,c.color,c.qty])));
+/* ---------- download rekap (popup pilihan) ---------- */
+async function allOrders(){
+ let L=[],b='';
+ for(;;){const r=await api(null,'?w=orders&status='+RS+b);L=L.concat(r.orders);if(r.orders.length<40)break;b='&before='+r.orders[r.orders.length-1].id}
+ return L.filter(o=>o.status!=='batal');
+}
+let X=null;
+const day=o=>{const d=new Date(o.created_at);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+async function openDl(){
+ $('#dl').style.display='block';$('#dl').innerHTML='<div class=box>Memuat pesanan...</div>';
+ const L=(await allOrders()).sort((a,b)=>String(a.name).localeCompare(b.name));
+ X={all:L,vis:L,sel:new Set(L.map(o=>o.id)),d1:'',d2:'',a:0,b:Math.max(0,L.length-1)};dlr();
+}
+function dlx(){$('#dl').style.display='none'}
+function dlf(){
+ X.d1=$('#d1').value;X.d2=$('#d2').value;X.a=+$('#fa').value;X.b=+$('#fb').value;
+ const lo=Math.min(X.a,X.b),hi=Math.max(X.a,X.b);
+ X.vis=X.all.filter((o,i)=>i>=lo&&i<=hi&&(!X.d1||day(o)>=X.d1)&&(!X.d2||day(o)<=X.d2));
+ X.sel=new Set(X.vis.map(o=>o.id));dlr();
+}
+function dlt(id){X.sel.has(id)?X.sel.delete(id):X.sel.add(id);dlr()}
+function dlAll(on){X.sel=on?new Set(X.vis.map(o=>o.id)):new Set();dlr()}
+const picked=()=>X.vis.filter(o=>X.sel.has(o.id));
+const sm=(a,f)=>a.reduce((s,x)=>s+f(x),0);
+function dlr(){
+ const P=picked(),opt=v=>X.all.map((o,i)=>`<option value=${i} ${i==v?'selected':''}>${esc(o.name)}${o.gugus?' ('+esc(o.gugus)+')':''}</option>`).join('');
+ $('#dl').innerHTML=`<div class=box><b style="font-size:17px">Pilih isi rekap</b>
+ <div class=row style="margin-top:8px">Dari pembeli <select id=fa onchange=dlf()>${opt(X.a)}</select> sampai <select id=fb onchange=dlf()>${opt(X.b)}</select></div>
+ <div class=row>Tanggal beli <input type=date id=d1 value="${X.d1}" onchange=dlf()> s/d <input type=date id=d2 value="${X.d2}" onchange=dlf()></div>
+ <div class=row><button class=g onclick=dlAll(true)>Pilih semua</button><button class=g onclick=dlAll(false)>Kosongkan</button><span class=sm>Klik kotak untuk centang/batal per pembeli</span></div>
+ <div class=bx>${X.vis.map(o=>`<label class="${X.sel.has(o.id)?'on':''}" onclick="dlt(${o.id})"><b>${X.sel.has(o.id)?'☑':'☐'} ${esc(o.name)}</b><br>${esc(o.gugus||o.prodi||'')} · ${esc(o.phone)}<br><span class=sm>${new Date(o.created_at).toLocaleDateString('id-ID')} · ${sm(o.items,i=>+i.qty||0)} unit</span><br><b>${rp(o.total)}</b></label>`).join('')||'<div class=sm>Tidak ada pesanan di rentang ini.</div>'}</div>
+ <div class=c style="background:#eef"><b>${P.length}</b> pembeli · <b>${sm(P,o=>sm(o.items,i=>+i.qty||0))}</b> unit · <b>${rp(sm(P,o=>+o.total||0))}</b></div>
+ <div class=row><button onclick=dlPDF() ${P.length?'':'disabled'}>Download PDF</button><button class=g onclick=dlCSV() ${P.length?'':'disabled'}>Download Excel (CSV)</button><button class=r onclick=dlx()>Tutup</button></div></div>`;
+}
+function dlCSV(){
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Nama','Prodi','Gugus','WA','Tanggal','Barang','Jumlah','Harga','Subtotal']];
+ picked().forEach(o=>o.items.forEach(i=>rows.push([o.name,o.prodi,o.gugus,o.phone,day(o),i.name,i.qty,i.price||'',(i.price||0)*i.qty])));
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='rekap-satset.csv';a.click();
 }
-function recapPDF(){
- const ln=(o)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>esc(k)+' '+v).join(', ');
- $('#pdf').innerHTML=`<h2>Rekap Pesanan SATSET</h2><div>${RS==='lunas'?'Lunas saja':'Menunggu + Lunas'} &middot; ${R.orders} pesanan &middot; ${new Date().toLocaleString('id-ID')}</div>`+
- R.products.map(p=>`<h3>${esc(p.name)} &mdash; ${p.qty} unit</h3>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div>Per ${LBL[a]}: ${ln(p[a])}</div>`:'').join('')}<table style="margin-top:6px"><tr><th>Model<th>Ukuran<th>Warna<th>Jumlah</tr>${p.combos.map(c=>`<tr><td>${esc(c.model)}<td>${esc(c.size)}<td>${esc(c.color)}<td>${c.qty}</tr>`).join('')}</table>`).join('');
+function dlPDF(){
+ const os=picked(),m={};
+ os.forEach(o=>o.items.forEach(i=>{const x=m[i.name]||(m[i.name]={q:0,r:0});x.q+=+i.qty||0;x.r+=(+i.price||0)*(+i.qty||0)}));
+ const bl=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
+ const qA=sm(os,o=>sm(o.items,i=>+i.qty||0)),qB=sm(bl,e=>e[1].q),rA=sm(os,o=>+o.total||0),rB=sm(bl,e=>e[1].r);
+ const ok=(a,b)=>a===b?'<b style="color:#118a3e">✔ SESUAI</b>':'<b style="color:#d33">✘ SELISIH '+Math.abs(a-b).toLocaleString('id-ID')+'</b>';
+ const per=(X.d1||X.d2)?(X.d1||'...')+' s/d '+(X.d2||'...'):'Semua tanggal';
+ const A=os.map(o=>`<div style="break-inside:avoid;margin-bottom:10px"><b>${esc(o.name)}</b>${o.prodi?' · '+esc(o.prodi):''}${o.gugus?' / '+esc(o.gugus):''} · WA: ${esc(o.phone)} · ${new Date(o.created_at).toLocaleDateString('id-ID')} · <i>${esc(o.status)}</i>
+ <table><tr><th>Barang<th style="width:50px">Jml<th style="width:90px">Harga<th style="width:100px">Subtotal</tr>${o.items.map(i=>{const h=+i.price||0;return `<tr><td>${esc(i.name)}<td>${+i.qty}<td>${h?rp(h):'-'}<td>${h?rp(h*i.qty):'-'}</tr>`}).join('')}<tr><td colspan=3 style="text-align:right"><b>Total</b><td><b>${rp(o.total)}</b></tr></table></div>`).join('');
+ $('#pdf').innerHTML=`<h2>Rekap Pesanan SATSET</h2><div>${os.length} pembeli · ${per} · ${new Date().toLocaleString('id-ID')}</div>
+ <h2 style="margin-top:14px">A. Pesanan per Pembeli</h2>${A}
+ <h2 style="margin-top:18px;break-before:page">B. Resume per Barang</h2>
+ <table><tr><th>Barang<th style="width:60px">Jumlah<th style="width:110px">Subtotal</tr>${bl.map(([n,x])=>`<tr><td>${esc(n)}<td>${x.q}<td>${x.r?rp(x.r):'-'}</tr>`).join('')}<tr><td><b>Total</b><td><b>${qB}</b><td><b>${rp(rB)}</b></tr></table>
+ <h2 style="margin-top:18px">C. Crosscheck</h2>
+ <table><tr><th>Cek<th>A. Per pembeli<th>B. Per barang<th>Hasil</tr>
+ <tr><td>Total unit<td>${qA}<td>${qB}<td>${ok(qA,qB)}</tr>
+ <tr><td>Total rupiah<td>${rp(rA)}<td>${rp(rB)}<td>${ok(rA,rB)}</tr></table>`;
  const t=document.title;document.title='Rekap SATSET';window.print();document.title=t;
 }
 load();
