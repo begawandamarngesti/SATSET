@@ -10,12 +10,10 @@ img{max-width:110px;border-radius:6px;display:block}.sticky{position:sticky;bott
 .tg{background:#eef;padding:6px 8px;border-radius:6px;display:inline-block;margin:2px}.tg input{width:90px}.gal{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}.th{width:110px}.th img{width:110px;height:110px;object-fit:cover}.th button{padding:4px 8px}
 #dl{position:fixed;inset:0;background:#0008;display:none;overflow:auto;z-index:9}#dl .box{background:#fff;max-width:900px;margin:16px auto;border-radius:12px;padding:14px}
 .bx{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:8px 0}.bx label{border:2px solid #ddd;border-radius:10px;padding:8px;cursor:pointer;display:block;font-size:13px}.bx label.on{border-color:#4f46e5;background:#eef}
-@media print{body>*:not(#pdf){display:none!important}#pdf{display:block!important}body{background:#fff}
-#pdf{font:12px system-ui,sans-serif;color:#000}#pdf h2{margin:0 0 4px;color:#1b4fa8}#pdf h3{margin:14px 0 4px;color:#1b4fa8}#pdf table{width:100%;border-collapse:collapse}
-#pdf th{background:#1b4fa8!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:left}#pdf td,#pdf th{border:1px solid #bbb;padding:4px 6px;font-size:12px}}
-#pdf{display:none}
 </style>
-<main id=app>Memuat...</main><div id=pdf></div><div id=dl></div>
+<main id=app>Memuat...</main><div id=dl></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
 let K=sessionStorage.k||'',S={clusters:[],products:[],variants:[],settings:{}},O=null,NQ=null,E=null,tab='p',busy=false;
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),rp=n=>'Rp'+(+n||0).toLocaleString('id-ID');
@@ -175,23 +173,46 @@ function dlCSV(){
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='rekap-satset.csv';a.click();
 }
 function dlPDF(){
+ if(!(window.jspdf&&window.jspdf.jsPDF))return alert('Library PDF belum termuat. Cek koneksi internet lalu muat ulang halaman.');
  const os=picked(),m={};
  os.forEach(o=>o.items.forEach(i=>{const x=m[i.name]||(m[i.name]={q:0,r:0});x.q+=+i.qty||0;x.r+=(+i.price||0)*(+i.qty||0)}));
  const bl=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
  const qA=sm(os,o=>sm(o.items,i=>+i.qty||0)),qB=sm(bl,e=>e[1].q),rA=sm(os,o=>+o.total||0),rB=sm(bl,e=>e[1].r);
- const ok=(a,b)=>a===b?'<b style="color:#118a3e">✔ SESUAI</b>':'<b style="color:#d33">✘ SELISIH '+Math.abs(a-b).toLocaleString('id-ID')+'</b>';
+ const ok=(a,b)=>a===b?'SESUAI':'SELISIH '+Math.abs(a-b).toLocaleString('id-ID');
  const per=(X.d1||X.d2)?(X.d1||'...')+' s/d '+(X.d2||'...'):'Semua tanggal';
- const A=os.map(o=>`<div style="break-inside:avoid;margin-bottom:10px"><b>${esc(o.name)}</b>${o.prodi?' · '+esc(o.prodi):''}${o.gugus?' / '+esc(o.gugus):''} · WA: ${esc(o.phone)} · ${new Date(o.created_at).toLocaleDateString('id-ID')} · <i>${esc(o.status)}</i>
- <table><tr><th>Barang<th style="width:50px">Jml<th style="width:90px">Harga<th style="width:100px">Subtotal</tr>${o.items.map(i=>{const h=+i.price||0;return `<tr><td>${esc(i.name)}<td>${+i.qty}<td>${h?rp(h):'-'}<td>${h?rp(h*i.qty):'-'}</tr>`}).join('')}<tr><td colspan=3 style="text-align:right"><b>Total</b><td><b>${rp(o.total)}</b></tr></table></div>`).join('');
- $('#pdf').innerHTML=`<h2>Rekap Pesanan SATSET</h2><div>${os.length} pembeli · ${per} · ${new Date().toLocaleString('id-ID')}</div>
- <h2 style="margin-top:14px">A. Pesanan per Pembeli</h2>${A}
- <h2 style="margin-top:18px;break-before:page">B. Resume per Barang</h2>
- <table><tr><th>Barang<th style="width:60px">Jumlah<th style="width:110px">Subtotal</tr>${bl.map(([n,x])=>`<tr><td>${esc(n)}<td>${x.q}<td>${x.r?rp(x.r):'-'}</tr>`).join('')}<tr><td><b>Total</b><td><b>${qB}</b><td><b>${rp(rB)}</b></tr></table>
- <h2 style="margin-top:18px">C. Crosscheck</h2>
- <table><tr><th>Cek<th>A. Per pembeli<th>B. Per barang<th>Hasil</tr>
- <tr><td>Total unit<td>${qA}<td>${qB}<td>${ok(qA,qB)}</tr>
- <tr><td>Total rupiah<td>${rp(rA)}<td>${rp(rB)}<td>${ok(rA,rB)}</tr></table>`;
- const t=document.title;document.title='Rekap SATSET';window.print();document.title=t;
+ const doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}),M=36,W=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight(),BLUE=[27,79,168];
+ const H=(t,y)=>{doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(...BLUE);doc.text(t,M,y);doc.setTextColor(0)};
+ let y=48;
+ doc.setFont('helvetica','bold');doc.setFontSize(17);doc.setTextColor(...BLUE);doc.text('Rekap Pesanan SATSET',M,y);y+=16;
+ doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(0);
+ doc.text(os.length+' pembeli | '+per+' | '+new Date().toLocaleString('id-ID'),M,y);y+=26;
+ H('A. Pesanan per Pembeli',y);y+=12;
+ os.forEach(o=>{
+  const info=doc.splitTextToSize(String(o.name)+(o.prodi?' | '+o.prodi:'')+(o.gugus?' / '+o.gugus:'')+' | WA: '+o.phone+' | '+new Date(o.created_at).toLocaleDateString('id-ID')+' | '+o.status,W-2*M);
+  if(y+info.length*12+60>PH-40){doc.addPage();y=48}
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(0);doc.text(info,M,y+10);y+=info.length*12+4;
+  doc.autoTable({startY:y,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},footStyles:{fillColor:[238,238,255],textColor:0},
+   columnStyles:{1:{cellWidth:40,halign:'right'},2:{cellWidth:75,halign:'right'},3:{cellWidth:85,halign:'right'}},
+   head:[['Barang','Jml','Harga','Subtotal']],
+   body:o.items.map(i=>{const h=+i.price||0;return [String(i.name),String(+i.qty||0),h?rp(h):'-',h?rp(h*i.qty):'-']}),
+   foot:[[{content:'Total',colSpan:3,styles:{halign:'right'}},{content:rp(o.total),styles:{halign:'right'}}]]});
+  y=doc.lastAutoTable.finalY+16;
+ });
+ doc.addPage();y=48;
+ H('B. Resume per Barang',y);
+ doc.autoTable({startY:y+8,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},footStyles:{fillColor:[238,238,255],textColor:0},
+  columnStyles:{1:{cellWidth:60,halign:'right'},2:{cellWidth:100,halign:'right'}},
+  head:[['Barang','Jumlah','Subtotal']],
+  body:bl.map(([n,x])=>[n,String(x.q),x.r?rp(x.r):'-']),
+  foot:[['Total',String(qB),rp(rB)]]});
+ y=doc.lastAutoTable.finalY+24;
+ if(y>PH-140){doc.addPage();y=48}
+ H('C. Crosscheck',y);
+ doc.autoTable({startY:y+8,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},
+  head:[['Cek','A. Per pembeli','B. Per barang','Hasil']],
+  body:[['Total unit',String(qA),String(qB),ok(qA,qB)],['Total rupiah',rp(rA),rp(rB),ok(rA,rB)]],
+  didParseCell:d=>{if(d.section==='body'&&d.column.index===3){d.cell.styles.fontStyle='bold';d.cell.styles.textColor=d.cell.raw==='SESUAI'?[17,138,62]:[221,51,51]}}});
+ doc.save('rekap-satset.pdf');
 }
 load();
 </script>
