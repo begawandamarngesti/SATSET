@@ -10,6 +10,10 @@ img{max-width:110px;border-radius:6px;display:block}.sticky{position:sticky;bott
 .tg{background:#eef;padding:6px 8px;border-radius:6px;display:inline-block;margin:2px}.tg input{width:90px}.gal{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}.th{width:110px}.th img{width:110px;height:110px;object-fit:cover}.th button{padding:4px 8px}
 #dl{position:fixed;inset:0;background:#0008;display:none;overflow:auto;z-index:9}#dl .box{background:#fff;max-width:900px;margin:16px auto;border-radius:12px;padding:14px}
 .bx{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:8px 0}.bx label{border:2px solid #ddd;border-radius:10px;padding:8px;cursor:pointer;display:block;font-size:13px}.bx label.on{border-color:#4f46e5;background:#eef}
+.rb{border-top:1px solid #e5e5ee;padding:10px 0}.rb:first-of-type{border-top:0}
+.rt{margin-top:4px}.rt th{background:#1b4fa8;color:#fff;padding:5px 6px;font-size:12px}.rt td{border-bottom:1px solid #eee;padding:4px 6px}.rt .n{text-align:right;white-space:nowrap}
+.rt tr.tt td{background:#eef;font-weight:700}.rt input{width:100%;margin:0;box-sizing:border-box}.rt input[type=number]{width:90px}
+.sx{padding:2px 9px;font-size:12px}.ok{color:#118a3e;font-weight:700}.bad{color:#d33;font-weight:700}
 </style>
 <main id=app>Memuat...</main><div id=dl></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -32,7 +36,7 @@ async function loadOrders(more){
  O.list=O.list.concat(r.orders);O.more=r.orders.length>=40;if(r.counts)O.counts=r.counts;render();
 }
 function setSt(s){O.st=s;loadOrders()}
-function go(t){tab=t;E=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else if(t==='r')loadRecap();else render()}
+function go(t){tab=t;E=null;ED=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else if(t==='r')loadRecap();else render()}
 function render(){
  $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button onclick="go('r')">Rekap</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():tab==='r'?recapView():E?editor():list());
 }
@@ -124,26 +128,69 @@ function settings(){
 async function picQ(el){if(!el.files[0])return;S.settings.wa_link=$('#wa').value;NQ=await img(el.files[0],1000,.92);render()}
 async function saveSet(){const b=$('#ss');b.disabled=true;b.textContent='Menyimpan...';const wa=$('#wa').value.trim();const r=await api({a:'settings',wa_link:wa,qris:NQ});if(r.ok){NQ=null;await load()}else{b.disabled=false;b.textContent='Simpan pengaturan'}}
 /* ---------- rekap ---------- */
-let R=null,RS='';const LBL={model:'Model',size:'Ukuran',color:'Warna'};
-async function loadRecap(){R=null;$('#app').innerHTML='Memuat rekap...';R=await api(null,'?w=recap&status='+RS);render()}
-function setRS(s){RS=s;loadRecap()}
+let R=null,RO=null,ED=null,RS='';const LBL={model:'Model',size:'Ukuran',color:'Warna'};
+/* edit pesanan & stok disimpan di browser ini (localStorage) */
+let EO={},STK={};try{EO=JSON.parse(localStorage.satset_eo||'{}');STK=JSON.parse(localStorage.satset_stk||'{}')}catch(e){}
+const svEO=()=>{try{localStorage.satset_eo=JSON.stringify(EO)}catch(e){}},svSTK=()=>{try{localStorage.satset_stk=JSON.stringify(STK)}catch(e){}};
+const tot=it=>it.reduce((s,i)=>s+(+i.qty||0)*(+i.price||0),0);
+const ov=o=>{const e=EO[o.id];return e?{...o,name:e.name,items:e.items,total:tot(e.items),edited:true}:o};
+const byDate=(a,b)=>(new Date(a.created_at)-new Date(b.created_at))||(a.id-b.id);
+async function loadRecap(){R=null;RO=null;$('#app').innerHTML='Memuat rekap...';R=await api(null,'?w=recap&status='+RS);RO=(await allRaw()).sort(byDate);render()}
+function setRS(s){RS=s;ED=null;loadRecap()}
+function stat(q,k){
+ const s=STK[k];if(s===undefined)return '<span class=sm>isi stok</span>';
+ const d=q-s;return d>0?`<span class=bad>Kurang ${d}</span>`:d===0?'<span class=ok>Aman</span>':`<span class=ok>Aman (lebih ${-d})</span>`;
+}
+function stk(el){
+ const k=el.dataset.n;if(el.value==='')delete STK[k];else STK[k]=Math.max(0,+el.value||0);svSTK();
+ el.closest('tr').querySelector('.ks').innerHTML=stat(+el.dataset.q,k);
+}
+function viewBox(o){
+ return `<div class=rb id=rb${o.id}><div class=row><b>${esc(o.name)}</b><span class=sm>${esc([o.prodi,o.gugus].filter(Boolean).join(' / '))} | WA: ${esc(o.phone)} | ${new Date(o.created_at).toLocaleDateString('id-ID')} | ${esc(o.status)}</span>${o.edited?'<span class=sm style="color:#c60">(diedit)</span>':''}<button class="g sx" onclick=edO(${o.id})>Edit</button></div><table class=rt><tr><th>Barang<th class=n>Jml<th class=n>Harga<th class=n>Subtotal</tr>${o.items.map(i=>`<tr><td>${esc(i.name)}<td class=n>${+i.qty||0}<td class=n>${(+i.price||0)?rp(i.price):'-'}<td class=n>${(+i.price||0)?rp(i.price*i.qty):'-'}</tr>`).join('')}<tr class=tt><td colspan=3 class=n>Total<td class=n>${rp(o.total)}</tr></table></div>`;
+}
+function editBox(){
+ const rows=ED.items.map((it,i)=>`<tr><td><input value="${esc(it.name)}" oninput="edIt(${i},'name',this.value)"><td><input type=number min=0 value="${it.qty}" oninput="edIt(${i},'qty',this.value)"><td><input type=number min=0 value="${it.price}" oninput="edIt(${i},'price',this.value)"><td class=n id=st${i}>${rp(it.qty*it.price)}<td><button class="r sx" onclick=edDel(${i})>x</button></tr>`).join('');
+ return `<div class=rb id=rb${ED.id} style="background:#fffbe6"><div class=row>Nama pembeli <input value="${esc(ED.name)}" style="width:260px" oninput="ED.name=this.value"></div><table class=rt><tr><th>Barang<th>Jml<th>Harga<th class=n>Subtotal<th></tr>${rows}<tr class=tt><td colspan=3 class=n>Total<td class=n id=edtot>${rp(tot(ED.items))}<td></tr></table><div class=row><button class=g onclick=edAdd()>+ Barang</button><button onclick=edSave()>Simpan</button><button class=g onclick=edCancel()>Batal</button>${EO[ED.id]?'<button class=r onclick=edReset()>Kembalikan ke asli</button>':''}</div></div>`;
+}
+function edO(id){const v=ov(RO.find(x=>x.id==id));ED={id,name:v.name,items:v.items.map(i=>({name:i.name,qty:+i.qty||0,price:+i.price||0}))};render()}
+function edIt(i,f,v){const it=ED.items[i];it[f]=f==='name'?v:(+v||0);$('#st'+i).textContent=rp(it.qty*it.price);$('#edtot').textContent=rp(tot(ED.items))}
+function refreshBox(){$('#rb'+ED.id).outerHTML=editBox()}
+function edAdd(){ED.items.push({name:'',qty:1,price:0});refreshBox()}
+function edDel(i){ED.items.splice(i,1);refreshBox()}
+function edSave(){
+ const items=ED.items.filter(i=>String(i.name).trim()).map(i=>({name:String(i.name).trim(),qty:+i.qty||0,price:+i.price||0}));
+ if(!items.length)return alert('Minimal harus ada 1 barang.');
+ EO[ED.id]={name:ED.name.trim()||'(tanpa nama)',items};svEO();ED=null;render();
+}
+function edCancel(){ED=null;render()}
+function edReset(){if(!confirm('Kembalikan pesanan ini ke data asli?'))return;delete EO[ED.id];svEO();ED=null;render()}
+function rekapAdmin(){
+ const L=RO.map(ov),m={};
+ L.forEach(o=>o.items.forEach(i=>{const k=String(i.name),x=m[k]||(m[k]={q:0,r:0});x.q+=+i.qty||0;x.r+=(+i.qty||0)*(+i.price||0)}));
+ const bl=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])),qB=sm(bl,e=>e[1].q),rB=sm(bl,e=>e[1].r);
+ return `<div class=c><b style="font-size:17px">Rekap Admin (bisa diedit)</b><div class=sm>${L.length} pembeli · urut dari beli paling awal sampai terbaru. Hasil edit dan stok tersimpan di browser ini dan ikut ke file download.</div></div>
+ <div class=c><b style="color:#1b4fa8">A. Pesanan per Pembeli</b>${L.map(o=>ED&&ED.id==o.id?editBox():viewBox(o)).join('')||'<div class=sm>Belum ada pesanan.</div>'}</div>
+ <div class=c><b style="color:#1b4fa8">B. Resume per Barang</b><div class=sm>Isi kolom Stok dengan jumlah yang sudah kamu beli.</div><div style="overflow-x:auto"><table class=rt><tr><th>Barang<th class=n>Dibeli<th>Stok<th>Status<th class=n>Subtotal</tr>${bl.map(([k,x])=>`<tr><td>${esc(k)}<td class=n>${x.q}<td><input type=number min=0 data-n="${esc(k)}" data-q=${x.q} value="${STK[k]??''}" oninput=stk(this)><td class=ks>${stat(x.q,k)}<td class=n>${x.r?rp(x.r):'-'}</tr>`).join('')}<tr class=tt><td>Total<td class=n>${qB}<td><td><td class=n>${rp(rB)}</tr></table></div></div>`;
+}
 function recapView(){
- if(!R||!R.products)return 'Rekap gagal dimuat.';
+ if(!R||!R.products||!RO)return 'Rekap gagal dimuat.';
  const bd=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class=tg>${esc(k)}: <b>${v}</b></span>`).join('');
- return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openPick()>Download rekap...</button><div class=sm>${R.orders} pesanan dihitung. Pesanan batal tidak ikut.</div></div>`+
+ return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openPick()>Download rekap...</button><div class=sm>${R.orders} pesanan dihitung. Pesanan batal tidak ikut.</div></div>`+rekapAdmin()+
+ `<div class=c><b>Ringkasan per produk &amp; varian</b></div>`+
  (R.products.map(p=>`<div class=c><b>${esc(p.name)}</b> &mdash; <b>${p.qty} unit</b> <span class=sm>${rp(p.rev)}</span>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div class=sm style="margin-top:6px">Per ${LBL[a]}:</div>${bd(p[a])}`:'').join('')}<div class=sm style="margin-top:6px">Per kombinasi:</div>${p.combos.map(c=>`<span class=tg>${esc(c.label)}: <b>${c.qty}</b></span>`).join('')}</div>`).join('')||'<div class=c>Belum ada pesanan.</div>');
 }
 /* ---------- download rekap (popup pilihan) ---------- */
-async function allOrders(){
+async function allRaw(){
  let L=[],b='';
  for(;;){const r=await api(null,'?w=orders&status='+RS+b);L=L.concat(r.orders);if(r.orders.length<40)break;b='&before='+r.orders[r.orders.length-1].id}
  return L.filter(o=>o.status!=='batal');
 }
+async function allOrders(){return (await allRaw()).map(ov)}
 let X=null;
 const day=o=>{const d=new Date(o.created_at);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 async function openDl(){
  $('#dl').style.display='block';$('#dl').innerHTML='<div class=box>Memuat pesanan...</div>';
- const L=(await allOrders()).sort((a,b)=>String(a.name).localeCompare(b.name));
+ const L=(await allOrders()).sort(byDate);
  X={all:L,vis:L,sel:new Set(L.map(o=>o.id)),d1:'',d2:'',a:0,b:Math.max(0,L.length-1)};dlr();
 }
 function dlx(){$('#dl').style.display='none'}
@@ -201,10 +248,11 @@ function dlPDF(){
  doc.addPage();y=48;
  H('B. Resume per Barang',y);
  doc.autoTable({startY:y+8,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},footStyles:{fillColor:[238,238,255],textColor:0},
-  columnStyles:{1:{cellWidth:60,halign:'right'},2:{cellWidth:100,halign:'right'}},
-  head:[['Barang','Jumlah','Subtotal']],
-  body:bl.map(([n,x])=>[n,String(x.q),x.r?rp(x.r):'-']),
-  foot:[['Total',String(qB),rp(rB)]]});
+  columnStyles:{1:{cellWidth:50,halign:'right'},2:{cellWidth:50,halign:'right'},3:{cellWidth:85},4:{cellWidth:90,halign:'right'}},
+  head:[['Barang','Jumlah','Stok','Status','Subtotal']],
+  body:bl.map(([n,x])=>{const s=STK[n];return [n,String(x.q),s===undefined?'-':String(s),s===undefined?'-':(x.q>s?'KURANG '+(x.q-s):'AMAN'),x.r?rp(x.r):'-']}),
+  foot:[['Total',String(qB),'','',rp(rB)]],
+  didParseCell:d=>{if(d.section==='body'&&d.column.index===3&&d.cell.raw!=='-'){d.cell.styles.fontStyle='bold';d.cell.styles.textColor=String(d.cell.raw).startsWith('KURANG')?[221,51,51]:[17,138,62]}}});
  y=doc.lastAutoTable.finalY+24;
  if(y>PH-140){doc.addPage();y=48}
  H('C. Crosscheck',y);
@@ -224,7 +272,7 @@ function openPick(){
 }
 async function pbData(){
  const t=$('#dl .box');t.insertAdjacentHTML('beforeend','<div class=sm id=pbm>Memuat pesanan...</div>');
- const L=(await allOrders()).sort((a,b)=>String(a.name).localeCompare(b.name));
+ const L=(await allOrders()).sort(byDate);
  const m=$('#pbm');if(m)m.remove();return L;
 }
 async function pbCSV(){
