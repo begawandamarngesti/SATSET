@@ -13,9 +13,11 @@ img{max-width:110px;border-radius:6px;display:block}.sticky{position:sticky;bott
 .rb{border-top:1px solid #e5e5ee;padding:10px 0}.rb:first-of-type{border-top:0}
 .rt{margin-top:4px}.rt th{background:#1b4fa8;color:#fff;padding:5px 6px;font-size:12px}.rt td{border-bottom:1px solid #eee;padding:4px 6px}.rt .n{text-align:right;white-space:nowrap}
 .rt tr.tt td{background:#eef;font-weight:700}.rt input{width:100%;margin:0;box-sizing:border-box}.rt input[type=number]{width:90px}
-.sx{padding:2px 9px;font-size:12px}.ok{color:#118a3e;font-weight:700}.bad{color:#d33;font-weight:700}
+.sx{padding:2px 9px;font-size:12px}.ok{color:#118a3e;font-weight:700}.bad{color:#d33;font-weight:700}.wr{color:#c2410c;font-weight:700}
+.rt tr.dn td{background:#dbeafe;color:#111;opacity:.72}
+#dm{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:20}.box2{background:#fff;border-radius:12px;padding:16px;max-width:340px;width:90%}
 </style>
-<main id=app>Memuat...</main><div id=dl></div>
+<main id=app>Memuat...</main><div id=dl></div><div id=dm></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
@@ -36,9 +38,9 @@ async function loadOrders(more){
  O.list=O.list.concat(r.orders);O.more=r.orders.length>=40;if(r.counts)O.counts=r.counts;render();
 }
 function setSt(s){O.st=s;loadOrders()}
-function go(t){tab=t;E=null;ED=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else if(t==='r')loadRecap();else render()}
+function go(t){tab=t;E=null;ED=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else if(t==='r'||t==='d')loadRecap();else render()}
 function render(){
- $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button onclick="go('r')">Rekap</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():tab==='r'?recapView():E?editor():list());
+ $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button onclick="go('r')">Rekap</button><button style="background:#16a34a" onclick="go('d')">Distribusi Barang</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():tab==='r'?recapView():tab==='d'?distView():E?editor():list());if(tab==='d')applyDF();
 }
 /* ---------- produk ---------- */
 function list(){
@@ -135,10 +137,20 @@ const svEO=()=>{try{localStorage.satset_eo=JSON.stringify(EO)}catch(e){}},svSTK=
 const tot=it=>it.reduce((s,i)=>s+(+i.qty||0)*(+i.price||0),0);
 const ov=o=>{const e=EO[o.id];return e?{...o,name:e.name,items:e.items,total:tot(e.items),edited:true}:o};
 const byDate=(a,b)=>(new Date(a.created_at)-new Date(b.created_at))||(a.id-b.id);
-async function loadRecap(){R=null;RO=null;$('#app').innerHTML='Memuat rekap...';R=await api(null,'?w=recap&status='+RS);RO=(await allRaw()).sort(byDate);render()}
+async function loadRecap(){R=null;RO=null;$('#app').innerHTML='Memuat rekap...';R=await api(null,'?w=recap&status='+RS);RO=(await allRaw()).sort(byDate);RT=new Date();render()}
 function setRS(s){RS=s;ED=null;loadRecap()}
+let RT=null,rbusy=false;
+async function refreshRecap(silent){
+ if(rbusy)return;rbusy=true;
+ try{
+  const r=await api(null,'?w=recap&status='+RS),o=(await allRaw()).sort(byDate);
+  R=r;RO=o;RT=new Date();if(tab==='r'||tab==='d')render();
+ }finally{rbusy=false}
+}
+/* otomatis sinkron tiap 30 detik, tidak mengganggu kalau sedang edit/mengetik */
+setInterval(()=>{if((tab==='r'||tab==='d')&&R&&!ED&&!rbusy&&$('#dl').style.display!=='block'&&$('#dm').style.display!=='flex'&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))refreshRecap(true)},30000);
 function stat(q,k){
- const s=STK[k];if(s===undefined)return '<span class=sm>isi stok</span>';
+ const s=STK[k]||0;
  const d=q-s;return d>0?`<span class=bad>Kurang ${d}</span>`:d===0?'<span class=ok>Aman</span>':`<span class=ok>Aman (lebih ${-d})</span>`;
 }
 function stk(el){
@@ -170,14 +182,66 @@ function rekapAdmin(){
  const bl=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])),qB=sm(bl,e=>e[1].q),rB=sm(bl,e=>e[1].r);
  return `<div class=c><b style="font-size:17px">Rekap Admin (bisa diedit)</b><div class=sm>${L.length} pembeli · urut dari beli paling awal sampai terbaru. Hasil edit dan stok tersimpan di browser ini dan ikut ke file download.</div></div>
  <div class=c><b style="color:#1b4fa8">A. Pesanan per Pembeli</b>${L.map(o=>ED&&ED.id==o.id?editBox():viewBox(o)).join('')||'<div class=sm>Belum ada pesanan.</div>'}</div>
- <div class=c><b style="color:#1b4fa8">B. Resume per Barang</b><div class=sm>Isi kolom Stok dengan jumlah yang sudah kamu beli.</div><div style="overflow-x:auto"><table class=rt><tr><th>Barang<th class=n>Dibeli<th>Stok<th>Status<th class=n>Subtotal</tr>${bl.map(([k,x])=>`<tr><td>${esc(k)}<td class=n>${x.q}<td><input type=number min=0 data-n="${esc(k)}" data-q=${x.q} value="${STK[k]??''}" oninput=stk(this)><td class=ks>${stat(x.q,k)}<td class=n>${x.r?rp(x.r):'-'}</tr>`).join('')}<tr class=tt><td>Total<td class=n>${qB}<td><td><td class=n>${rp(rB)}</tr></table></div></div>`;
+ <div class=c><b style="color:#1b4fa8">B. Resume per Barang</b><div class=sm>Isi kolom Stok dengan jumlah yang sudah kamu beli.</div><div style="overflow-x:auto"><table class=rt><tr><th>Barang<th class=n>Dibeli<th>Stok<th>Status<th class=n>Subtotal</tr>${bl.map(([k,x])=>`<tr><td>${esc(k)}<td class=n>${x.q}<td><input type=number min=0 data-n="${esc(k)}" data-q=${x.q} placeholder=0 value="${STK[k]??''}" oninput=stk(this)><td class=ks>${stat(x.q,k)}<td class=n>${x.r?rp(x.r):'-'}</tr>`).join('')}<tr class=tt><td>Total<td class=n>${qB}<td><td><td class=n>${rp(rB)}</tr></table></div></div>`;
 }
 function recapView(){
  if(!R||!R.products||!RO)return 'Rekap gagal dimuat.';
  const bd=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class=tg>${esc(k)}: <b>${v}</b></span>`).join('');
- return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openPick()>Download rekap...</button><div class=sm>${R.orders} pesanan dihitung. Pesanan batal tidak ikut.</div></div>`+rekapAdmin()+
+ return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openPick()>Download rekap...</button> <button onclick="refreshRecap()">🔄 Refresh</button><div class=sm>${R.orders} pesanan dihitung (yang sudah kirim pesanan dianggap sudah bayar). Pesanan batal tidak ikut. Diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}, otomatis cek tiap 30 detik.</div></div>`+rekapAdmin()+
  `<div class=c><b>Ringkasan per produk &amp; varian</b></div>`+
  (R.products.map(p=>`<div class=c><b>${esc(p.name)}</b> &mdash; <b>${p.qty} unit</b> <span class=sm>${rp(p.rev)}</span>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div class=sm style="margin-top:6px">Per ${LBL[a]}:</div>${bd(p[a])}`:'').join('')}<div class=sm style="margin-top:6px">Per kombinasi:</div>${p.combos.map(c=>`<span class=tg>${esc(c.label)}: <b>${c.qty}</b></span>`).join('')}</div>`).join('')||'<div class=c>Belum ada pesanan.</div>');
+}
+/* ---------- distribusi barang ---------- */
+let DST={};try{DST=JSON.parse(localStorage.satset_dst||'{}')}catch(e){}
+const svDST=()=>{try{localStorage.satset_dst=JSON.stringify(DST)}catch(e){}};
+const dk=(o,i)=>o.id+'|'+i.name;
+const dgot=(o,i)=>Math.min(+DST[dk(o,i)]||0,+i.qty||0);
+const dfull=(o,i)=>(+i.qty||0)>0&&dgot(o,i)>=(+i.qty||0);
+let DH=false,DQ='';
+const ordOf=id=>ov(RO.find(r=>r.id==id));
+function dBox(o){
+ const n=o.items.length,dn=o.items.filter(i=>dfull(o,i)).length;
+ const key=esc((o.name+' '+(o.prodi||'')+' '+(o.gugus||'')+' '+o.phone).toLowerCase());
+ return `<div class=rb id=db${o.id} data-done=${dn===n?1:0} data-s="${key}"><div class=row><b>${esc(o.name)}</b><span class=sm>${esc([o.prodi,o.gugus].filter(Boolean).join(' / '))} | WA: ${esc(o.phone)} | ${new Date(o.created_at).toLocaleDateString('id-ID')}</span><span class=sm>${dn}/${n} barang selesai</span>${dn===n?'<span class=ok>✔ Selesai</span>':''}</div><table class=rt><tr><th>Barang<th class=n>Jml<th class=n>Harga<th class=n>Subtotal<th>Distribusi</tr>${o.items.map((i,x)=>{const g=dgot(o,i),f=dfull(o,i),h=+i.price||0;return `<tr class="${f?'dn':''}"><td>${esc(i.name)}<td class=n>${+i.qty||0}<td class=n>${h?rp(h):'-'}<td class=n>${h?rp(h*i.qty):'-'}<td><label style="display:flex;gap:6px;align-items:center;margin:0;cursor:pointer"><input type=checkbox ${f?'checked':''} style="width:20px;height:20px;margin:0" onclick="event.preventDefault();dClick(${o.id},${x})">${f?'Selesai':g?`<span class=wr>${g}/${+i.qty}</span>`:''}</label></tr>`}).join('')}</table></div>`;
+}
+function dResume(){
+ const m={};
+ RO.map(ov).forEach(o=>o.items.forEach(i=>{const k=String(i.name),x=m[k]||(m[k]={q:0,d:0});x.q+=+i.qty||0;x.d+=dgot(o,i)}));
+ const bl=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])),tq=sm(bl,e=>e[1].q),td=sm(bl,e=>e[1].d);
+ return `<div class=sm style="margin:4px 0"><b>${td}</b> dari <b>${tq}</b> unit sudah terdistribusi · belum: <b class=wr>${tq-td}</b> unit</div><div style="overflow-x:auto"><table class=rt><tr><th>Barang<th class=n>Dibutuhkan<th class=n>Tersedia (stok)<th class=n>Terdistribusi<th>Belum distribusi</tr>${bl.map(([k,x])=>{const s=STK[k]||0,b=x.q-x.d;return `<tr class="${b===0?'dn':''}"><td>${esc(k)}<td class=n>${x.q}<td class=n>${s}<td class=n>${x.d}<td>${b===0?'<span class=ok>Selesai</span>':`<span class=wr>Belum ${b}</span>`+(x.q>s?` <span class=bad style="font-size:12px">· stok kurang ${x.q-s}</span>`:'')}</tr>`}).join('')}<tr class=tt><td>Total<td class=n>${tq}<td><td class=n>${td}<td>Belum ${tq-td}</tr></table></div>`;
+}
+function distView(){
+ if(!RO)return 'Memuat...';
+ const L=RO.map(ov);
+ return `<div class=c><div class=row><button onclick="refreshRecap()">🔄 Refresh</button><input id=dq placeholder="🔍 Cari nama / gugus / WA" value="${esc(DQ)}" oninput="DQ=this.value;applyDF()" style="min-width:220px"><label class=row style="gap:4px;margin:0"><input type=checkbox ${DH?'checked':''} onchange="DH=this.checked;applyDF()"> Sembunyikan yang sudah selesai</label></div><div class=sm>${L.length} pembeli · urut dari beli paling awal · diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}. Centang tersimpan di browser ini.</div></div>
+ <div class=c><b style="color:#118a3e;font-size:17px">Distribusi per Pembeli</b>${L.map(o=>dBox(o)).join('')||'<div class=sm>Belum ada pesanan.</div>'}</div>
+ <div class=c><b style="color:#118a3e;font-size:17px">Resume Barang</b><div id=dres>${dResume()}</div></div>`;
+}
+function applyDF(){
+ const q=DQ.trim().toLowerCase();
+ document.querySelectorAll('#app .rb[data-s]').forEach(e=>{e.style.display=((!q||e.dataset.s.includes(q))&&!(DH&&e.dataset.done==='1'))?'':'none'});
+}
+function refreshD(id){
+ const e=$('#db'+id);if(e)e.outerHTML=dBox(ordOf(id));
+ const r=$('#dres');if(r)r.innerHTML=dResume();
+}
+function dClick(id,x){
+ const o=ordOf(id),i=o.items[x];
+ if(dfull(o,i)){
+  if(!confirm('Yakin membatalkan distribusi "'+i.name+'" untuk '+o.name+'?'))return;
+  delete DST[dk(o,i)];svDST();refreshD(id);return;
+ }
+ const q=+i.qty||0,g=dgot(o,i);
+ $('#dm').style.display='flex';
+ $('#dm').innerHTML=`<div class=box2><b>Distribusi barang</b><div class=sm style="margin:4px 0">${esc(o.name)} · ${esc(i.name)}</div><div>Dibeli: <b>${q}</b>. Berapa yang sudah didistribusikan?</div><input type=number id=dmq min=0 max=${q} value="${g||q}" style="width:120px;font-size:18px" onkeydown="if(event.key==='Enter')dmSave(${id},${x})"><div class=sm>Kalau semua, biarkan angka ini lalu Simpan.</div><div class=row><button onclick="dmSave(${id},${x})">Simpan</button><button class=g onclick=dmX()>Batal</button></div></div>`;
+ setTimeout(()=>{const e=$('#dmq');if(e){e.focus();e.select()}},30);
+}
+function dmX(){$('#dm').style.display='none';$('#dm').innerHTML=''}
+function dmSave(id,x){
+ const o=ordOf(id),i=o.items[x],q=+i.qty||0;let v=Math.floor(+$('#dmq').value);
+ if(isNaN(v)||v<0)v=0;if(v>q)v=q;
+ if(v>0)DST[dk(o,i)]=v;else delete DST[dk(o,i)];
+ svDST();dmX();refreshD(id);
 }
 /* ---------- download rekap (popup pilihan) ---------- */
 async function allRaw(){
@@ -250,7 +314,7 @@ function dlPDF(){
  doc.autoTable({startY:y+8,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},footStyles:{fillColor:[238,238,255],textColor:0},
   columnStyles:{1:{cellWidth:50,halign:'right'},2:{cellWidth:50,halign:'right'},3:{cellWidth:85},4:{cellWidth:90,halign:'right'}},
   head:[['Barang','Jumlah','Stok','Status','Subtotal']],
-  body:bl.map(([n,x])=>{const s=STK[n];return [n,String(x.q),s===undefined?'-':String(s),s===undefined?'-':(x.q>s?'KURANG '+(x.q-s):'AMAN'),x.r?rp(x.r):'-']}),
+  body:bl.map(([n,x])=>{const s=STK[n]||0;return [n,String(x.q),String(s),(x.q>s?'KURANG '+(x.q-s):'AMAN'),x.r?rp(x.r):'-']}),
   foot:[['Total',String(qB),'','',rp(rB)]],
   didParseCell:d=>{if(d.section==='body'&&d.column.index===3&&d.cell.raw!=='-'){d.cell.styles.fontStyle='bold';d.cell.styles.textColor=String(d.cell.raw).startsWith('KURANG')?[221,51,51]:[17,138,62]}}});
  y=doc.lastAutoTable.finalY+24;
