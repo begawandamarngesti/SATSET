@@ -35,10 +35,11 @@ summary{font-weight:700;font-size:18px;padding:10px 0;cursor:pointer;color:var(-
 .opt{margin-top:8px;padding:10px;background:var(--bl);border-radius:10px}
 .cbt{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.chat{flex-wrap:wrap}
 .ckbtn{font-weight:700;white-space:nowrap}.ckdl{width:100%;background:#16a34a;font-weight:700;padding:10px}
-#ckd{max-width:760px;width:96%;max-height:90vh;padding:14px}#ckd[open]{display:flex;flex-direction:column;gap:6px}
+#ckd{max-width:860px;width:96%;max-height:90vh;padding:14px}#ckd[open]{display:flex;flex-direction:column;gap:6px}
 .ckh{display:flex;justify-content:space-between;align-items:center;color:#1b4fa8;font-size:17px}.ckb{overflow:auto;flex:1}.lg{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}
-.ct{width:100%;border-collapse:collapse;font-size:14px}.ct th{background:#1b4fa8;color:#fff;text-align:left;padding:6px;position:sticky;top:0}.ct td{padding:6px;border-bottom:1px solid #e3e9fb}
+.ct{width:100%;border-collapse:collapse;font-size:14px}.ct th{background:#1b4fa8;color:#fff;text-align:left;padding:6px;position:sticky;top:0}.ct td{padding:6px;border-bottom:1px solid #e3e9fb;vertical-align:top}
 .ct tr.kl td{background:var(--bl);color:#1b4fa8;font-weight:700}.ct tr.sy td{background:#f3f7ff}.ct input[type=checkbox]{width:22px;height:22px;margin:0}
+.kt{font-size:13px;color:#445;min-width:190px}
 .pl{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;white-space:nowrap}.pl.yes{background:#1b4fa8;color:#fff}.pl.no{background:#e5e7eb;color:#6b7280}
 .gw{position:relative}.ss{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border-radius:8px;scrollbar-width:none}.ss::-webkit-scrollbar{display:none}.ss img{flex:0 0 100%;width:100%;aspect-ratio:1;object-fit:contain;background:#fff;scroll-snap-align:center;border-radius:0}.gc{position:absolute;right:6px;bottom:6px;background:#0008;color:#fff;font-size:11px;padding:2px 7px;border-radius:10px}.ga{position:absolute;top:50%;transform:translateY(-50%);width:28px!important;height:28px;padding:0;border-radius:50%;background:#0006;font-size:18px;margin:0!important}.ga.l{left:4px}.ga.r{right:4px}
 .hot{font-size:12px;color:#c2410c;font-weight:600;min-height:0}
@@ -60,113 +61,126 @@ dialog{max-width:420px;width:92%;border-radius:12px;border:0}dialog h3{color:var
 <dialog id=ckd><div class=ckh><b>✅ Cek barang wajib</b><button class=gr style="width:auto" onclick="$('#ckd').close()">Tutup</button></div><button class=ckdl onclick=dlCek()>⬇️ Download list barangmu (PNG)</button><input id=cq placeholder="🔍 Cari nama barang..." oninput=renderCek()><div class=sm id=cp></div><div class=lg><span class="pl yes">✔ SATSET MENYEDIAKAN</span> <span class="pl no">✖ Bawa sendiri</span></div><div class=ckb id=ctb></div></dialog>
 <script>
 /* ===== DAFTAR BARANG WAJIB =====
- Isi satu baris per barang, format:  Klaster|Nama barang|1 atau 0
+ Isi satu baris per barang, format:  Klaster|Nama barang|1 atau 0|Keterangan
  1 = disediakan Satset (biru, ada), 0 = bawa sendiri (abu, silang). Baris diawali # diabaikan. */
 const CEK_TXT=`
-# Klaster|Nama barang|1 atau 0
-Dokumen & Ibadah|Kartu Asuransi Kesehatan/BPJS/Bukti Pengurusan BPJS dan kartu identitas (KTP/SIM/fotokopi KK/identitas lainnya)|0
-Dokumen & Ibadah|Pas foto formal 2x3 latar belakang merah|0
-Dokumen & Ibadah|Kitab suci|1
-Dokumen & Ibadah|Alat ibadah|0
-Pakaian & Aksesoris|Kemeja putih|1
-Pakaian & Aksesoris|Kemeja biru PDH, polos|1
-Pakaian & Aksesoris|Atasan batik|1
-Pakaian & Aksesoris|Celana panjang (bagi laki-laki)|0
-Pakaian & Aksesoris|Rok panjang (bagi perempuan)|0
-Pakaian & Aksesoris|Ikat pinggang|0
-Pakaian & Aksesoris|Jilbab perkuliahan (bagi yang mengenakan)|0
-Pakaian & Aksesoris|Dalaman jilbab (bagi yang mengenakan)|0
-Pakaian & Aksesoris|Pakaian dalam|0
-Pakaian & Aksesoris|Sepatu bertali|0
-Pakaian & Aksesoris|Kaos kaki|0
-Pakaian & Aksesoris|Jaket/sweater|0
-Pakaian & Aksesoris|Pakaian tidur|0
-Pakaian & Aksesoris|Pakaian pesiar|0
-Pakaian & Aksesoris|Sandal selop|1
-Pakaian Harian di Asrama|Celana training panjang/rok panjang (tidak ketat)|1
-Pakaian Harian di Asrama|Kaos polos berkerah (tidak ketat)|1
-Pakaian Harian di Asrama|Jilbab bahan kaos (bagi yang mengenakan)|0
-Pakaian Olahraga|Kaos olahraga|1
-Pakaian Olahraga|Sepatu olahraga|0
-Pakaian Olahraga|Kaos kaki olahraga|0
-Perlengkapan Kesehatan|Paracetamol|0
-Perlengkapan Kesehatan|Obat batuk|0
-Perlengkapan Kesehatan|Obat maag|0
-Perlengkapan Kesehatan|Minyak kayu putih|0
-Perlengkapan Kesehatan|Plester kompres demam|0
-Perlengkapan Kesehatan|Masker|0
-Perlengkapan Kesehatan|Tisu saku|0
-Perlengkapan Kesehatan|Hand sanitizer|0
-Perlengkapan Kesehatan|Vitamin|0
-Perlengkapan Pribadi|Bantal|0
-Perlengkapan Pribadi|Sprei|0
-Perlengkapan Pribadi|Sarung bantal|0
-Perlengkapan Pribadi|Selimut|0
-Perlengkapan Pribadi|Handuk|0
-Perlengkapan Pribadi|Sabun mandi, sampo, pasta gigi, sikat gigi, sabun cuci muka|0
-Perlengkapan Pribadi|Sikat pembersih botol (opsional)|0
-Perlengkapan Pribadi|Lip balm|0
-Perlengkapan Pribadi|Skincare (opsional)|0
-Perlengkapan Pribadi|Lotion anti nyamuk|0
-Perlengkapan Pribadi|Parfum|0
-Perlengkapan Pribadi|Cotton buds|0
-Perlengkapan Pribadi|Pembalut (khusus perempuan)|0
-Perlengkapan Belajar|Laptop|0
-Perlengkapan Belajar|Tab|0
-Perlengkapan Belajar|Alat tulis|0
-Perlengkapan Belajar|Earphone/headset/TWS|0
-Perlengkapan Belajar|Tas ransel beritsleting pada kantung utama|0
-Perlengkapan Belajar|Lampu belajar portable|1
-Tas Bawaan|Koper|0
-Tas Bawaan|Tas besar|0
-Tas Bawaan|Backpack/kardus/tas lainnya|0
-Tas Bawaan|Tas laundry bag|0
-Plastik Bening|Plastik bening|0
-Perlengkapan Lain|Deterjen cair untuk mesin cuci bukaan depan (front loading)|0
-Perlengkapan Lain|Sabun cuci piring + spons|0
-Perlengkapan Lain|Semir sepatu (bisa sikat atau polis)|1
-Perlengkapan Lain|Gelas/cangkir non-kaca|0
-Perlengkapan Lain|Tumbler (botol minum non-kaca)|0
-Perlengkapan Lain|Hanger baju|1
-Perlengkapan Lain|Lunch box|1
-Perlengkapan Lain|Pembersih toilet|0
-Perlengkapan Lain|Pembersih lantai|0
-Perlengkapan Lain|Kanebo|1
-Perlengkapan Lain|Tanda pengenal dada (name tag)|0
-Perlengkapan Lain|Buku selain textbook|0
-Perlengkapan Lain|Peluit|1
-Makanan Minuman (opsional)|Roti tawar|0
-Makanan Minuman (opsional)|Biskuit/wafer/makanan kering|0
-Makanan Minuman (opsional)|Minuman bubuk|0
-Keperluan Kamar (opsional)|Kabel rol|0
-Dinamika - Umum|Dasi|0
-Dinamika - Umum|Tote bag|0
-Dinamika - Umum|Payung lipat|1
-Dinamika - Umum|Jas hujan sekali pakai|1
-Dinamika - Umum|Pulpen bertinta hitam/biru|0
-Dinamika - Umum|Kertas koran|0
-Dinamika - Umum|Buku penugasan Dinamika|1
-Dinamika - Umum|Co-card Dinamika|1
-Dinamika - Umum|Kartu pelanggaran Dinamika|1
-Dinamika - Umum|Pam-pam Dinamika|1
-Dinamika - Umum|Botol air minuman kemasan|0
-Dinamika - Umum|Kertas kardus ukuran 30x30 cm|0
-Dinamika - Umum|Kantong plastik (kresek) hitam|0
-Dinamika - Umum|Kantong plastik (kresek) besar merah|0
-Dinamika - Umum|Kantong plastik (kresek) bening|0
-Dinamika - Umum|Tempat dan lap kacamata (opsional)|0
-Dinamika - Umum|Surat-surat penting yang dibutuhkan (SIM dan STNK) (opsional)|0
-Dinamika - Umum|Gunting kuku|0
-Dinamika - Umum|Kertas double folio|0
-Dinamika - Umum|Lem atau double tape|0
-Dinamika - Umum|Gunting|0
-Dinamika - Umum|Amplop|0
-Dinamika - Khusus Laki-laki|Kaos dalam|1
-Dinamika - Khusus Laki-laki|Alat cukur non elektrik|0
-Dinamika - Khusus Perempuan|Kaos dalam berlengan (panjang)|1
-Dinamika - Khusus Perempuan|Legging polos|0
-Dinamika - Khusus Perempuan|Jilbab polos|0
-Dinamika - Khusus Perempuan|Ikat rambut|0
+# Klaster|Nama barang|1 atau 0|Keterangan
+Dokumen & Ibadah|Kartu Asuransi Kesehatan/BPJS/Bukti Pengurusan BPJS dan kartu identitas (KTP/SIM/fotokopi KK)|0|Atas nama sendiri
+Dokumen & Ibadah|Pas foto formal 2x3 latar merah|0|Min. 2 lembar. Atasan putih, jilbab putih/hitam
+Dokumen & Ibadah|Pakta integritas asrama (dicetak & diisi)|0|Form di bit.ly/form_asrama
+Dokumen & Ibadah|Formulir data alergi (dicetak & diisi)|0|Form di bit.ly/form_asrama
+Dokumen & Ibadah|Formulir barang bawaan mahasiswa asrama (dicetak & diisi)|0|Ada di halaman ketentuan barang bawaan
+Dokumen & Ibadah|Kitab suci|1|1 buah sesuai agama. Tidak dibawa saat Dinamika kecuali ditugaskan
+Dokumen & Ibadah|Sajadah (bagi Muslim)|0|Maks. 2. Bagi non-Muslim menyesuaikan
+Dokumen & Ibadah|Sarung (laki-laki Muslim)|0|Maks. 2
+Dokumen & Ibadah|Mukena (perempuan Muslim)|0|Maks. 2
+Pakaian & Aksesoris|Kemeja putih|1|Maks. 2. Polos, tidak slim fit, tidak menerawang, tanpa logo, lengan panjang, saku 1/tanpa saku, kancing putih/bening
+Pakaian & Aksesoris|Kemeja biru PDH, polos|1|1 buah. Lengan panjang, berkerah, berkancing depan
+Pakaian & Aksesoris|Atasan batik|1|Maks. 2. Motif bebas, lengan panjang, kerah standar, tidak crop/slim fit, tanpa dasi
+Pakaian & Aksesoris|Celana panjang (bagi laki-laki)|0|Hitam, maks. 3. Kain (bukan jeans/kaos/satin/corduroy), menutup mata kaki, tidak slim fit
+Pakaian & Aksesoris|Rok panjang (bagi perempuan)|0|Hitam, maks. 3. Sampai mata kaki, ada tempat ikat pinggang, kain (bukan jeans/sifon/kaos/satin), model A, tanpa belahan, tidak span/ketat
+Pakaian & Aksesoris|Ikat pinggang|0|Hitam polos, 1 buah. Kepala/gesper hitam, tusuk/jepit
+Pakaian & Aksesoris|Jilbab perkuliahan (bagi yang mengenakan)|0|Maks. 3. Polos tanpa motif
+Pakaian & Aksesoris|Dalaman jilbab (bagi yang mengenakan)|0|Hitam polos, maks. 3
+Pakaian & Aksesoris|Pakaian dalam|0|Warna bebas, secukupnya
+Pakaian & Aksesoris|Sepatu bertali|0|Hitam, 1 pasang. Tali hitam, sol hitam/putih, jenis bebas (mis. kets)
+Pakaian & Aksesoris|Kaos kaki|0|Hitam polos, 3 pasang. Tanpa logo, min. 10 cm di atas mata kaki
+Pakaian & Aksesoris|Jaket/sweater|0|1 buah
+Pakaian & Aksesoris|Pakaian tidur|0|Maks. 2 pasang. Piyama atau atasan + celana panjang (bukan daster/celana pendek)
+Pakaian & Aksesoris|Pakaian pesiar|0|Maks. 3 pasang (1 atasan + 1 bawahan). Sopan, untuk keluar kampus akhir pekan
+Pakaian & Aksesoris|Sandal selop|1|1 pasang. Hitam (laki-laki) / abu-abu (perempuan), model sederhana. Saat Dinamika: beri nama & bungkus kresek hitam
+Pakaian Harian di Asrama|Celana training panjang/rok panjang (tidak ketat)|1|Hitam polos, 3 buah. Tanpa ring/karet di ujung
+Pakaian Harian di Asrama|Kaos polos berkerah (tidak ketat)|1|Hitam, biru dongker, abu muda: @2 buah. Merah maroon: 1 buah. Logo kecil boleh, lengan panjang bagi berjilbab
+Pakaian Harian di Asrama|Jilbab bahan kaos (bagi yang mengenakan)|0|Hitam/biru dongker/abu-abu tua, maks. 3. Model bergo
+Pakaian Olahraga|Kaos olahraga|1|Hitam, 2 buah. Sopan, rapi, tidak ketat
+Pakaian Olahraga|Sepatu olahraga|0|1 pasang. Model & warna bebas
+Pakaian Olahraga|Kaos kaki olahraga|0|Maks. 3 pasang. Di atas mata kaki
+Perlengkapan Kesehatan|Paracetamol|0|Min. 1 strip/botol. Saat Dinamika dibungkus kresek bening
+Perlengkapan Kesehatan|Obat batuk|0|Min. 1 strip/botol
+Perlengkapan Kesehatan|Obat maag|0|Min. 1 strip/botol
+Perlengkapan Kesehatan|Minyak kayu putih|0|1 botol
+Perlengkapan Kesehatan|Plester kompres demam|0|Min. 3 buah
+Perlengkapan Kesehatan|Masker|0|Min. 6 (asrama); Dinamika 1 lembar/hari (7 lembar)
+Perlengkapan Kesehatan|Tisu saku|0|Sesuai kebutuhan
+Perlengkapan Kesehatan|Hand sanitizer|0|Sesuai kebutuhan
+Perlengkapan Kesehatan|Vitamin|0|Sesuai kebutuhan
+Perlengkapan Kesehatan|Obat pribadi tambahan (nyeri haid, tolak angin, freshcare, dll)|0|Opsional. Penyakit bawaan: obat harus sesuai instruksi panitia medis, bungkus kresek bening
+Perlengkapan Pribadi|Bantal|0|1 buah, 40 x 60 cm
+Perlengkapan Pribadi|Sprei|0|Abu-abu polos, 1 buah, 120 x 200 cm
+Perlengkapan Pribadi|Sarung bantal|0|Abu-abu polos, 2 buah
+Perlengkapan Pribadi|Selimut|0|Abu-abu polos, bahan wol, maks. 2 helai
+Perlengkapan Pribadi|Handuk|0|Maks. 2 helai
+Perlengkapan Pribadi|Sabun mandi, sampo, pasta gigi, sikat gigi, sabun cuci muka|0|Tiap item 1 buah
+Perlengkapan Pribadi|Sikat pembersih botol (opsional)|0|1 buah
+Perlengkapan Pribadi|Lip balm|0|1 buah. Jika berwarna, tidak dipakai saat Dinamika
+Perlengkapan Pribadi|Skincare (opsional)|0|Maks. 1 buah per barang (toner, moisturizer, sunscreen, micellar water, body lotion, deodorant). Tidak boleh riasan/kosmetik saat Dinamika
+Perlengkapan Pribadi|Lotion anti nyamuk|0|Secukupnya, direkomendasikan
+Perlengkapan Pribadi|Parfum|0|1 buah
+Perlengkapan Pribadi|Cotton buds|0|Secukupnya
+Perlengkapan Pribadi|Pembalut (khusus perempuan)|0|Sesuai kebutuhan. Saat Dinamika min. 2, tiap pembalut dibungkus kresek hitam
+Perlengkapan Belajar|Laptop|0|1 unit, sangat direkomendasikan
+Perlengkapan Belajar|Tab|0|1 unit, jika diperlukan
+Perlengkapan Belajar|Alat tulis|0|Sesuai kebutuhan
+Perlengkapan Belajar|Earphone/headset/TWS|0|1 buah, direkomendasikan
+Perlengkapan Belajar|Tas ransel beritsleting pada kantung utama|0|Warna bebas, 1 buah. Tanpa gantungan kunci/aksesori, muat semua barang bawaan
+Perlengkapan Belajar|Lampu belajar portable|1|1 buah, maks. 15 watt. Tidak boleh model colokan/AC
+Tas Bawaan|Koper|0|Maks. 1 buah, maks. 28 inci. Minimalkan barang
+Tas Bawaan|Tas besar|0|Maks. 1 buah
+Tas Bawaan|Backpack/kardus/tas lainnya|0|Maks. 1 buah
+Tas Bawaan|Tas laundry bag|0|1 buah, min. 35 x 45 cm, bisa dilipat, warna gelap
+Plastik Bening|Plastik bening|0|Min. 1, ukuran min. 40 x 60 cm. Beri identitas (untuk simpan barang sitaan)
+Perlengkapan Lain|Deterjen cair untuk mesin cuci bukaan depan (front loading)|0|Maks. 1,6 L. So Klin/Rinso/Attack. Cukup 1 bulan
+Perlengkapan Lain|Sabun cuci piring + spons|0|1 set, botol paling kecil. Cukup 1 bulan
+Perlengkapan Lain|Semir sepatu (bisa sikat atau polis)|1|1 buah, jika diperlukan
+Perlengkapan Lain|Gelas/cangkir non-kaca|0|1 buah
+Perlengkapan Lain|Tumbler (botol minum non-kaca)|0|Maks. 1 liter. Saat Dinamika wajib terisi penuh
+Perlengkapan Lain|Hanger baju|1|Maks. 12 buah
+Perlengkapan Lain|Lunch box|1|1 buah
+Perlengkapan Lain|Pembersih toilet|0|1 botol, min. 160 ml (mis. Vixal, Harpic, WPC)
+Perlengkapan Lain|Pembersih lantai|0|1 botol, min. 160 ml (mis. SoKlin, Wipol, Super Pell)
+Perlengkapan Lain|Kanebo|1|1 buah
+Perlengkapan Lain|Tanda pengenal dada (name tag)|0|1 buah, model magnet direkomendasikan
+Perlengkapan Lain|Buku selain textbook|0|1 buah. Pengembangan diri, sejarah, fiksi, dll
+Perlengkapan Lain|Peluit|1|1 buah, warna kuning
+Makanan Minuman (opsional)|Roti tawar|0|1 pack
+Makanan Minuman (opsional)|Biskuit/wafer/makanan kering|0|3 bungkus
+Makanan Minuman (opsional)|Minuman bubuk|0|Maks. 12 sachet atau 1 kg (kopi, milo, dll). Yang tidak sesuai ketentuan disita
+Keperluan Kamar (opsional)|Kabel rol|0|1 buah. Standar SNI, maks. 5 m, 2 x 1,5 mm, tidak boleh bentuk T
+Dinamika - Umum|Dasi|0|Hitam, 1 buah. Panjang, polos, tanpa motif/logo, tidak bertekstur
+Dinamika - Umum|Tote bag|0|1 buah, min. 30 x 40 cm, bebas
+Dinamika - Umum|Payung lipat|1|1 buah. Simpan di dalam ransel, tidak terlihat dari luar
+Dinamika - Umum|Jas hujan sekali pakai|1|7 buah (1 per hari), dikemas plastik
+Dinamika - Umum|Pulpen bertinta hitam/biru|0|Maks. 2 buah
+Dinamika - Umum|Kertas koran|0|5 lembar (1 per hari)
+Dinamika - Umum|Buku penugasan Dinamika|1|Ketentuan menyusul
+Dinamika - Umum|Co-card Dinamika|1|Dipakai setiap kegiatan. Ketentuan menyusul
+Dinamika - Umum|Kartu pelanggaran Dinamika|1|Ketentuan di staner.id/KartuPelanggaranDinamika2026
+Dinamika - Umum|Pam-pam Dinamika|1|Ketentuan menyusul
+Dinamika - Umum|Botol air minuman kemasan|0|1,5 L diisi penuh, tempel kertas nama + gugus + kelompok (spidol hitam). Handbook 1 botol, daftar asrama 2 botol. Muslim: label dilepas, non-Muslim: label tetap
+Dinamika - Umum|Kertas kardus ukuran 30x30 cm|0|1 buah, alas duduk
+Dinamika - Umum|Kantong plastik (kresek) hitam|0|2 lusin. Juga untuk bungkus sandal
+Dinamika - Umum|Kantong plastik (kresek) besar merah|0|2 buah. Muat untuk bungkus ransel
+Dinamika - Umum|Kantong plastik (kresek) bening|0|3 buah. Untuk obat & barang opsional
+Dinamika - Umum|Tempat dan lap kacamata (opsional)|0|Bagi pengguna kacamata. Lensa kontak dilarang
+Dinamika - Umum|Surat-surat penting yang dibutuhkan (SIM dan STNK) (opsional)|0|Opsional
+Dinamika - Umum|Gunting kuku|0|1 buah
+Dinamika - Umum|Kertas double folio|0|2 lusin
+Dinamika - Umum|Lem atau double tape|0|Sesuai kebutuhan
+Dinamika - Umum|Gunting|0|1 buah
+Dinamika - Umum|Amplop|0|2 buah
+Dinamika - Kelompok|Tote bag gugus|0|2 buah, min. 45 x 35 cm. Ravala: merah, Akasha: ungu, Mahika: hijau, Nirtara: biru
+Dinamika - Kelompok|Kertas metalik sesuai warna gugus|0|3 lembar, min. 45 x 60 cm
+Dinamika - Kelompok|Slinger rumbai sesuai warna gugus|0|Panjang 2 meter
+Dinamika - Kelompok|Barang dekorasi tambahan (opsional)|0|Sesuai kesepakatan kelompok
+Dinamika - Hari Tertentu|Kertas panduan persembahan 1000 candi|0|Diberikan panitia, wajib dilaminating. Dibawa hari ke-1 s.d. ke-3
+Dinamika - Hari Tertentu|Kertas Bingo Dinamika 2026|0|Cetak bolak-balik A4, 1 lembar. Hanya hari ke-2. Link: staner.id/BingoDinamikaMaba / Miba
+Dinamika - Hari Tertentu|Bibit pohon|0|Hanya hari ke-4. Ketentuan: staner.id/KetentuanPohon
+Dinamika - Khusus Laki-laki|Kaos dalam|1|Putih polos lengan pendek, 2 s.d. 5 buah
+Dinamika - Khusus Laki-laki|Alat cukur non elektrik|0|Sesuai kebutuhan
+Dinamika - Khusus Perempuan|Kaos dalam berlengan (panjang)|1|Putih polos, 2 s.d. 5 buah. Bukan handsock
+Dinamika - Khusus Perempuan|Legging polos|0|Warna gelap, 2 s.d. 5 buah. Dimasukkan ke kaos kaki
+Dinamika - Khusus Perempuan|Jilbab polos|0|Putih, 2 s.d. 3 buah. Segi empat (bukan pashmina), tidak transparan, tutup dada hingga ulu hati
+Dinamika - Khusus Perempuan|Ikat rambut|0|Hitam polos, kuat. Untuk yang tidak berjilbab: rambut diikat ekor kuda
 `;
 const LOGO='data:image/png;base64,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';
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),rp=n=>'Rp'+(+n).toLocaleString('id-ID');
@@ -176,7 +190,7 @@ let D,cart={},sending=false;
 document.querySelectorAll('[data-logo]').forEach(i=>i.src=LOGO);
 {const l=document.createElement('link');l.rel='icon';l.href=LOGO;document.head.appendChild(l)}
 $('#wa').href=WA;
-const CEK=(()=>{const c={};return CEK_TXT.split('\n').map(l=>l.trim()).filter(l=>l&&l[0]!=='#').map(l=>{const [k,n,s]=l.split('|').map(x=>x.trim());return {k,n,s:s==='1',no:k?(c[k]=(c[k]||0)+1):0}}).filter(x=>x.k&&x.n)})();
+const CEK=(()=>{const c={};return CEK_TXT.split('\n').map(l=>l.trim()).filter(l=>l&&l[0]!=='#').map(l=>{const [k,n,s,...t]=l.split('|').map(x=>x.trim());return {k,n,s:s==='1',t:t.join(' | '),no:k?(c[k]=(c[k]||0)+1):0}}).filter(x=>x.k&&x.n)})();
 let CK={};try{CK=JSON.parse(localStorage.getItem('satset_ck')||'{}')}catch(e){}
 const ckKey=x=>x.k+'|'+x.n,ckDone=()=>CEK.filter(x=>CK[ckKey(x)]).length;
 function openCek(){$('#cq').value='';$('#ckd').showModal();renderCek()}
@@ -186,11 +200,11 @@ function renderCek(){
  $('#cp').textContent=ckDone()+' dari '+CEK.length+' barang sudah kamu ceklis';
  let h='',cur=null,rows=0;
  CEK.forEach((x,i)=>{
-  if(q&&!(x.n.toLowerCase().includes(q)||x.k.toLowerCase().includes(q)))return;
-  if(x.k!==cur){cur=x.k;h+=`<tr class=kl><td colspan=4>${esc(x.k)}</tr>`}
-  h+=`<tr class="${x.s?'sy':''}"><td>${x.no}<td>${esc(x.n)}<td>${x.s?'<span class="pl yes">✔ SATSET MENYEDIAKAN</span>':'<span class="pl no">✖ Bawa sendiri</span>'}<td style="text-align:center"><input type=checkbox ${CK[ckKey(x)]?'checked':''} onchange="tgk(${i},this.checked)"></tr>`;rows++;
+  if(q&&!(x.n.toLowerCase().includes(q)||x.k.toLowerCase().includes(q)||x.t.toLowerCase().includes(q)))return;
+  if(x.k!==cur){cur=x.k;h+=`<tr class=kl><td colspan=5>${esc(x.k)}</tr>`}
+  h+=`<tr class="${x.s?'sy':''}"><td>${x.no}<td>${esc(x.n)}<td>${x.s?'<span class="pl yes">✔ SATSET MENYEDIAKAN</span>':'<span class="pl no">✖ Bawa sendiri</span>'}<td style="text-align:center"><input type=checkbox ${CK[ckKey(x)]?'checked':''} onchange="tgk(${i},this.checked)"><td class=kt>${esc(x.t)}</tr>`;rows++;
  });
- box.innerHTML=rows?`<table class=ct><tr><th>No<th>Jenis Barang<th>SATSET MENYEDIAKAN?<th>Ceklis</tr>${h}</table>`:'<p>Tidak ada barang yang cocok.</p>';
+ box.innerHTML=rows?`<table class=ct><tr><th>No<th>Jenis Barang<th>SATSET MENYEDIAKAN?<th>Ceklis<th>Keterangan</tr>${h}</table>`:'<p>Tidak ada barang yang cocok.</p>';
 }
 function dlCek(){
  const W=800,S=2,P=28,LH=26,done=[],todo=[];
