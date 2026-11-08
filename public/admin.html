@@ -130,7 +130,7 @@ function setRS(s){RS=s;loadRecap()}
 function recapView(){
  if(!R||!R.products)return 'Rekap gagal dimuat.';
  const bd=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class=tg>${esc(k)}: <b>${v}</b></span>`).join('');
- return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openDl()>Download rekap...</button><div class=sm>${R.orders} pesanan dihitung. Pesanan batal tidak ikut.</div></div>`+
+ return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openPick()>Download rekap...</button><div class=sm>${R.orders} pesanan dihitung. Pesanan batal tidak ikut.</div></div>`+
  (R.products.map(p=>`<div class=c><b>${esc(p.name)}</b> &mdash; <b>${p.qty} unit</b> <span class=sm>${rp(p.rev)}</span>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div class=sm style="margin-top:6px">Per ${LBL[a]}:</div>${bd(p[a])}`:'').join('')}<div class=sm style="margin-top:6px">Per kombinasi:</div>${p.combos.map(c=>`<span class=tg>${esc(c.label)}: <b>${c.qty}</b></span>`).join('')}</div>`).join('')||'<div class=c>Belum ada pesanan.</div>');
 }
 /* ---------- download rekap (popup pilihan) ---------- */
@@ -159,13 +159,13 @@ const picked=()=>X.vis.filter(o=>X.sel.has(o.id));
 const sm=(a,f)=>a.reduce((s,x)=>s+f(x),0);
 function dlr(){
  const P=picked(),opt=v=>X.all.map((o,i)=>`<option value=${i} ${i==v?'selected':''}>${esc(o.name)}${o.gugus?' ('+esc(o.gugus)+')':''}</option>`).join('');
- $('#dl').innerHTML=`<div class=box><b style="font-size:17px">Pilih isi rekap</b>
+ $('#dl').innerHTML=`<div class=box><b style="font-size:17px">Rekap Pembeli: pilih isi rekap</b>
  <div class=row style="margin-top:8px">Dari pembeli <select id=fa onchange=dlf()>${opt(X.a)}</select> sampai <select id=fb onchange=dlf()>${opt(X.b)}</select></div>
  <div class=row>Tanggal beli <input type=date id=d1 value="${X.d1}" onchange=dlf()> s/d <input type=date id=d2 value="${X.d2}" onchange=dlf()></div>
  <div class=row><button class=g onclick=dlAll(true)>Pilih semua</button><button class=g onclick=dlAll(false)>Kosongkan</button><span class=sm>Klik kotak untuk centang/batal per pembeli</span></div>
  <div class=bx>${X.vis.map(o=>`<label class="${X.sel.has(o.id)?'on':''}" onclick="dlt(${o.id})"><b>${X.sel.has(o.id)?'☑':'☐'} ${esc(o.name)}</b><br>${esc(o.gugus||o.prodi||'')} · ${esc(o.phone)}<br><span class=sm>${new Date(o.created_at).toLocaleDateString('id-ID')} · ${sm(o.items,i=>+i.qty||0)} unit</span><br><b>${rp(o.total)}</b></label>`).join('')||'<div class=sm>Tidak ada pesanan di rentang ini.</div>'}</div>
  <div class=c style="background:#eef"><b>${P.length}</b> pembeli · <b>${sm(P,o=>sm(o.items,i=>+i.qty||0))}</b> unit · <b>${rp(sm(P,o=>+o.total||0))}</b></div>
- <div class=row><button onclick=dlPDF() ${P.length?'':'disabled'}>Download PDF</button><button class=g onclick=dlCSV() ${P.length?'':'disabled'}>Download Excel (CSV)</button><button class=r onclick=dlx()>Tutup</button></div></div>`;
+ <div class=row><button onclick=dlPDF() ${P.length?'':'disabled'}>Download PDF</button><button class=g onclick=dlCSV() ${P.length?'':'disabled'}>Download Excel (CSV)</button><button class=g onclick=openPick()>Kembali</button><button class=r onclick=dlx()>Tutup</button></div></div>`;
 }
 function dlCSV(){
  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Nama','Prodi','Gugus','WA','Tanggal','Barang','Jumlah','Harga','Subtotal']];
@@ -213,6 +213,46 @@ function dlPDF(){
   body:[['Total unit',String(qA),String(qB),ok(qA,qB)],['Total rupiah',rp(rA),rp(rB),ok(rA,rB)]],
   didParseCell:d=>{if(d.section==='body'&&d.column.index===3){d.cell.styles.fontStyle='bold';d.cell.styles.textColor=d.cell.raw==='SESUAI'?[17,138,62]:[221,51,51]}}});
  doc.save('rekap-satset.pdf');
+}
+/* ---------- pilihan rekap: admin / pembeli ---------- */
+function openPick(){
+ $('#dl').style.display='block';
+ $('#dl').innerHTML=`<div class=box><b style="font-size:17px">Download rekap untuk siapa?</b>
+ <div class=c style="background:#eef"><b>Rekap Admin</b><div class=sm>Total per produk, model, ukuran, warna, dan kombinasi (sama seperti tampilan Rekap). Mengikuti filter yang aktif.</div><div class=row><button onclick=adPDF()>Download PDF</button><button class=g onclick=adCSV()>Download Excel (CSV)</button></div></div>
+ <div class=c style="background:#eef"><b>Rekap Pembeli</b><div class=sm>Nama pembeli, barang yang dibeli, harga, dan total. Bisa pilih pembeli tertentu.</div><button onclick=openDl()>Lanjut pilih pembeli</button></div>
+ <button class=r onclick=dlx()>Tutup</button></div>`;
+}
+function adRows(){
+ const out=[];
+ (R.products||[]).forEach(p=>{
+  [['model','Model'],['size','Ukuran'],['color','Warna']].forEach(([a,l])=>Object.entries(p[a]||{}).sort((x,y)=>y[1]-x[1]).forEach(([k,v])=>out.push([p.name,'Per '+l,k,v])));
+  (p.combos||[]).forEach(c=>out.push([p.name,'Kombinasi',c.label,c.qty]));
+ });
+ return out;
+}
+const adInfo=()=>(RS==='lunas'?'Lunas saja':'Menunggu + Lunas')+' | '+R.orders+' pesanan | '+new Date().toLocaleString('id-ID');
+function adCSV(){
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Produk','Total unit','Total rupiah','Jenis','Rincian','Jumlah']];
+ (R.products||[]).forEach(p=>{
+  rows.push([p.name,p.qty,p.rev,'TOTAL','','']);
+  adRows().filter(r=>r[0]===p.name).forEach(r=>rows.push(['','','',r[1],r[2],r[3]]));
+ });
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='rekap-admin-satset.csv';a.click();
+}
+function adPDF(){
+ if(!(window.jspdf&&window.jspdf.jsPDF))return alert('Library PDF belum termuat. Cek koneksi internet lalu muat ulang halaman.');
+ const doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}),M=36,BLUE=[27,79,168];
+ doc.setFont('helvetica','bold');doc.setFontSize(17);doc.setTextColor(...BLUE);doc.text('Rekap Admin SATSET',M,48);
+ doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(0);doc.text(adInfo(),M,64);
+ let y=80;
+ (R.products||[]).forEach(p=>{
+  const body=adRows().filter(r=>r[0]===p.name).map(r=>[r[1],r[2],String(r[3])]);
+  doc.autoTable({startY:y,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},
+   columnStyles:{2:{cellWidth:60,halign:'right'}},
+   head:[[{content:p.name+' - '+p.qty+' unit - '+rp(p.rev),colSpan:3}],['Jenis','Rincian','Jumlah']],body});
+  y=doc.lastAutoTable.finalY+14;
+ });
+ doc.save('rekap-admin-satset.pdf');
 }
 load();
 </script>
