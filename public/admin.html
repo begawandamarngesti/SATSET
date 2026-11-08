@@ -1,4 +1,4 @@
-<!doctype html><html lang=id><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Admin</title>
+<!doctype html><html lang=id><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Admin v3</title>
 <style>
 body{font:15px system-ui;margin:0;background:#f4f4f8;color:#222}main{max-width:960px;margin:auto;padding:12px}
 .c{background:#fff;border-radius:10px;padding:12px;margin:10px 0}
@@ -159,24 +159,86 @@ const picked=()=>X.vis.filter(o=>X.sel.has(o.id));
 const sm=(a,f)=>a.reduce((s,x)=>s+f(x),0);
 function dlr(){
  const P=picked(),opt=v=>X.all.map((o,i)=>`<option value=${i} ${i==v?'selected':''}>${esc(o.name)}${o.gugus?' ('+esc(o.gugus)+')':''}</option>`).join('');
- $('#dl').innerHTML=`<div class=box><b style="font-size:17px">Rekap Pembeli: pilih pembeli</b>
+ $('#dl').innerHTML=`<div class=box><b style="font-size:17px">Rekap Admin: pilih isi rekap</b>
  <div class=row style="margin-top:8px">Dari pembeli <select id=fa onchange=dlf()>${opt(X.a)}</select> sampai <select id=fb onchange=dlf()>${opt(X.b)}</select></div>
  <div class=row>Tanggal beli <input type=date id=d1 value="${X.d1}" onchange=dlf()> s/d <input type=date id=d2 value="${X.d2}" onchange=dlf()></div>
  <div class=row><button class=g onclick=dlAll(true)>Pilih semua</button><button class=g onclick=dlAll(false)>Kosongkan</button><span class=sm>Klik kotak untuk centang/batal per pembeli</span></div>
- <div class=bx>${X.vis.map(o=>`<label class="${X.sel.has(o.id)?'on':''}" onclick="dlt(${o.id})"><b>${X.sel.has(o.id)?'☑':'☐'} ${esc(o.name)}</b><br>${esc(o.gugus||o.prodi||'')} · ${esc(o.phone)}<br><span class=sm>${new Date(o.created_at).toLocaleDateString('id-ID')}</span></label>`).join('')||'<div class=sm>Tidak ada pesanan di rentang ini.</div>'}</div>
+ <div class=bx>${X.vis.map(o=>`<label class="${X.sel.has(o.id)?'on':''}" onclick="dlt(${o.id})"><b>${X.sel.has(o.id)?'☑':'☐'} ${esc(o.name)}</b><br>${esc(o.gugus||o.prodi||'')} · ${esc(o.phone)}<br><span class=sm>${new Date(o.created_at).toLocaleDateString('id-ID')} · ${sm(o.items,i=>+i.qty||0)} unit</span><br><b>${rp(o.total)}</b></label>`).join('')||'<div class=sm>Tidak ada pesanan di rentang ini.</div>'}</div>
+ <div class=c style="background:#eef"><b>${P.length}</b> pembeli · <b>${sm(P,o=>sm(o.items,i=>+i.qty||0))}</b> unit · <b>${rp(sm(P,o=>+o.total||0))}</b></div>
  <div class=row><button onclick=dlPDF() ${P.length?'':'disabled'}>Download PDF</button><button class=g onclick=dlCSV() ${P.length?'':'disabled'}>Download Excel (CSV)</button><button class=g onclick=openPick()>Kembali</button><button class=r onclick=dlx()>Tutup</button></div></div>`;
 }
 function dlCSV(){
- const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Nama','Prodi','Gugus','Barang','Jumlah','Harga']];
- picked().forEach(o=>o.items.forEach(i=>rows.push([o.name,o.prodi,o.gugus,i.name,i.qty,i.price||''])));
- const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='rekap-pembeli-satset.csv';a.click();
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Nama','Prodi','Gugus','WA','Tanggal','Barang','Jumlah','Harga','Subtotal']];
+ picked().forEach(o=>o.items.forEach(i=>rows.push([o.name,o.prodi,o.gugus,o.phone,day(o),i.name,i.qty,i.price||'',(i.price||0)*i.qty])));
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='rekap-admin-satset.csv';a.click();
 }
 function dlPDF(){
  if(!(window.jspdf&&window.jspdf.jsPDF))return alert('Library PDF belum termuat. Cek koneksi internet lalu muat ulang halaman.');
- const os=picked(),doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}),M=36,W=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight(),BLUE=[27,79,168];
+ const os=picked(),m={};
+ os.forEach(o=>o.items.forEach(i=>{const x=m[i.name]||(m[i.name]={q:0,r:0});x.q+=+i.qty||0;x.r+=(+i.price||0)*(+i.qty||0)}));
+ const bl=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
+ const qA=sm(os,o=>sm(o.items,i=>+i.qty||0)),qB=sm(bl,e=>e[1].q),rA=sm(os,o=>+o.total||0),rB=sm(bl,e=>e[1].r);
+ const ok=(a,b)=>a===b?'SESUAI':'SELISIH '+Math.abs(a-b).toLocaleString('id-ID');
+ const per=(X.d1||X.d2)?(X.d1||'...')+' s/d '+(X.d2||'...'):'Semua tanggal';
+ const doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}),M=36,W=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight(),BLUE=[27,79,168];
+ const H=(t,y)=>{doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(...BLUE);doc.text(t,M,y);doc.setTextColor(0)};
+ let y=48;
+ doc.setFont('helvetica','bold');doc.setFontSize(17);doc.setTextColor(...BLUE);doc.text('Rekap Admin SATSET',M,y);y+=16;
+ doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(0);
+ doc.text(os.length+' pembeli | '+per+' | '+new Date().toLocaleString('id-ID'),M,y);y+=26;
+ H('A. Pesanan per Pembeli',y);y+=12;
+ os.forEach(o=>{
+  const info=doc.splitTextToSize(String(o.name)+(o.prodi?' | '+o.prodi:'')+(o.gugus?' / '+o.gugus:'')+' | WA: '+o.phone+' | '+new Date(o.created_at).toLocaleDateString('id-ID')+' | '+o.status,W-2*M);
+  if(y+info.length*12+60>PH-40){doc.addPage();y=48}
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(0);doc.text(info,M,y+10);y+=info.length*12+4;
+  doc.autoTable({startY:y,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},footStyles:{fillColor:[238,238,255],textColor:0},
+   columnStyles:{1:{cellWidth:40,halign:'right'},2:{cellWidth:75,halign:'right'},3:{cellWidth:85,halign:'right'}},
+   head:[['Barang','Jml','Harga','Subtotal']],
+   body:o.items.map(i=>{const h=+i.price||0;return [String(i.name),String(+i.qty||0),h?rp(h):'-',h?rp(h*i.qty):'-']}),
+   foot:[[{content:'Total',colSpan:3,styles:{halign:'right'}},{content:rp(o.total),styles:{halign:'right'}}]]});
+  y=doc.lastAutoTable.finalY+16;
+ });
+ doc.addPage();y=48;
+ H('B. Resume per Barang',y);
+ doc.autoTable({startY:y+8,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},footStyles:{fillColor:[238,238,255],textColor:0},
+  columnStyles:{1:{cellWidth:60,halign:'right'},2:{cellWidth:100,halign:'right'}},
+  head:[['Barang','Jumlah','Subtotal']],
+  body:bl.map(([n,x])=>[n,String(x.q),x.r?rp(x.r):'-']),
+  foot:[['Total',String(qB),rp(rB)]]});
+ y=doc.lastAutoTable.finalY+24;
+ if(y>PH-140){doc.addPage();y=48}
+ H('C. Crosscheck',y);
+ doc.autoTable({startY:y+8,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},
+  head:[['Cek','A. Per pembeli','B. Per barang','Hasil']],
+  body:[['Total unit',String(qA),String(qB),ok(qA,qB)],['Total rupiah',rp(rA),rp(rB),ok(rA,rB)]],
+  didParseCell:d=>{if(d.section==='body'&&d.column.index===3){d.cell.styles.fontStyle='bold';d.cell.styles.textColor=d.cell.raw==='SESUAI'?[17,138,62]:[221,51,51]}}});
+ doc.save('rekap-admin-satset.pdf');
+}
+/* ---------- pilihan rekap: admin / pembeli ---------- */
+function openPick(){
+ $('#dl').style.display='block';
+ $('#dl').innerHTML=`<div class=box><b style="font-size:17px">Download rekap untuk siapa? (v3)</b>
+ <div class=c style="background:#eef"><b>Rekap Admin</b><div class=sm>Pesanan per pembeli, resume per barang, dan crosscheck. Ada filter pembeli dan tanggal.</div><button onclick=openDl()>Buka rekap admin</button></div>
+ <div class=c style="background:#eef"><b>Rekap Pembeli</b><div class=sm>Nama pembeli dan barang yang dibeli. Semua pembeli, langsung download tanpa filter.</div><div class=row><button onclick=pbPDF()>Download PDF</button><button class=g onclick=pbCSV()>Download Excel (CSV)</button></div></div>
+ <button class=r onclick=dlx()>Tutup</button></div>`;
+}
+async function pbData(){
+ const t=$('#dl .box');t.insertAdjacentHTML('beforeend','<div class=sm id=pbm>Memuat pesanan...</div>');
+ const L=(await allOrders()).sort((a,b)=>String(a.name).localeCompare(b.name));
+ const m=$('#pbm');if(m)m.remove();return L;
+}
+async function pbCSV(){
+ const L=await pbData();
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Nama','Prodi','Gugus','Barang','Jumlah','Harga']];
+ L.forEach(o=>o.items.forEach(i=>rows.push([o.name,o.prodi,o.gugus,i.name,i.qty,i.price||''])));
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='rekap-pembeli-satset.csv';a.click();
+}
+async function pbPDF(){
+ if(!(window.jspdf&&window.jspdf.jsPDF))return alert('Library PDF belum termuat. Cek koneksi internet lalu muat ulang halaman.');
+ const L=await pbData(),doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}),M=36,W=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight(),BLUE=[27,79,168];
  let y=48;
  doc.setFont('helvetica','bold');doc.setFontSize(17);doc.setTextColor(...BLUE);doc.text('Rekap Pembeli SATSET',M,y);y+=26;
- os.forEach(o=>{
+ L.forEach(o=>{
   const info=doc.splitTextToSize(String(o.name)+(o.prodi?' | '+o.prodi:'')+(o.gugus?' / '+o.gugus:''),W-2*M);
   if(y+info.length*12+60>PH-40){doc.addPage();y=48}
   doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(0);doc.text(info,M,y+10);y+=info.length*12+4;
@@ -187,46 +249,6 @@ function dlPDF(){
   y=doc.lastAutoTable.finalY+16;
  });
  doc.save('rekap-pembeli-satset.pdf');
-}
-/* ---------- pilihan rekap: admin / pembeli ---------- */
-function openPick(){
- $('#dl').style.display='block';
- $('#dl').innerHTML=`<div class=box><b style="font-size:17px">Download rekap untuk siapa?</b>
- <div class=c style="background:#eef"><b>Rekap Admin</b><div class=sm>Total per produk, model, ukuran, warna, dan kombinasi (sama seperti tampilan Rekap). Mengikuti filter yang aktif.</div><div class=row><button onclick=adPDF()>Download PDF</button><button class=g onclick=adCSV()>Download Excel (CSV)</button></div></div>
- <div class=c style="background:#eef"><b>Rekap Pembeli</b><div class=sm>Nama pembeli, barang yang dibeli, harga, dan total. Bisa pilih pembeli tertentu.</div><button onclick=openDl()>Lanjut pilih pembeli</button></div>
- <button class=r onclick=dlx()>Tutup</button></div>`;
-}
-function adRows(){
- const out=[];
- (R.products||[]).forEach(p=>{
-  [['model','Model'],['size','Ukuran'],['color','Warna']].forEach(([a,l])=>Object.entries(p[a]||{}).sort((x,y)=>y[1]-x[1]).forEach(([k,v])=>out.push([p.name,'Per '+l,k,v])));
-  (p.combos||[]).forEach(c=>out.push([p.name,'Kombinasi',c.label,c.qty]));
- });
- return out;
-}
-const adInfo=()=>(RS==='lunas'?'Lunas saja':'Menunggu + Lunas')+' | '+R.orders+' pesanan | '+new Date().toLocaleString('id-ID');
-function adCSV(){
- const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Produk','Total unit','Total rupiah','Jenis','Rincian','Jumlah']];
- (R.products||[]).forEach(p=>{
-  rows.push([p.name,p.qty,p.rev,'TOTAL','','']);
-  adRows().filter(r=>r[0]===p.name).forEach(r=>rows.push(['','','',r[1],r[2],r[3]]));
- });
- const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='rekap-admin-satset.csv';a.click();
-}
-function adPDF(){
- if(!(window.jspdf&&window.jspdf.jsPDF))return alert('Library PDF belum termuat. Cek koneksi internet lalu muat ulang halaman.');
- const doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}),M=36,BLUE=[27,79,168];
- doc.setFont('helvetica','bold');doc.setFontSize(17);doc.setTextColor(...BLUE);doc.text('Rekap Admin SATSET',M,48);
- doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(0);doc.text(adInfo(),M,64);
- let y=80;
- (R.products||[]).forEach(p=>{
-  const body=adRows().filter(r=>r[0]===p.name).map(r=>[r[1],r[2],String(r[3])]);
-  doc.autoTable({startY:y,margin:{left:M,right:M},theme:'grid',styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:BLUE,textColor:255},
-   columnStyles:{2:{cellWidth:60,halign:'right'}},
-   head:[[{content:p.name+' - '+p.qty+' unit - '+rp(p.rev),colSpan:3}],['Jenis','Rincian','Jumlah']],body});
-  y=doc.lastAutoTable.finalY+14;
- });
- doc.save('rekap-admin-satset.pdf');
 }
 load();
 </script>
