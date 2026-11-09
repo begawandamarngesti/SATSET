@@ -1,6 +1,7 @@
 const {db,isAdmin}=require('./_lib');
 const {syncOrder}=require('./_sheet');
 const T=['clusters','products'],OF='id,created_at,name,phone,items,status,prodi,gugus';
+const IMG='product_images'; // ganti kalau nama tabel foto lu beda
 
 /* data edit pesanan, stok, dan centang distribusi (dipakai bersama) disimpan di tabel settings: key eo:/stk:/dst: */
 async function getState(){
@@ -56,8 +57,8 @@ module.exports=async(req,res)=>{
    return res.json({orders:o.data||[],counts:cnt&&{menunggu:cnt[0].count,lunas:cnt[1].count,batal:cnt[2].count}});
   }
   if(w==='proof'){const o=await db.from('orders').select('proof').eq('id',+req.query.id).single();return res.json({proof:o.data&&o.data.proof})}
-  const [c,p,v,s]=await Promise.all([db.from('clusters').select('*').order('sort'),db.from('products').select('id,cluster_id,name,description,active,image_v,size_v').order('id'),db.from('variants').select('*').order('id'),db.from('settings').select('key,value').in('key',['wa_link','qris_v'])]);
-  return res.json({clusters:c.data||[],products:p.data||[],variants:v.data||[],settings:Object.fromEntries((s.data||[]).map(x=>[x.key,x.value]))});
+  const [c,p,v,s,im]=await Promise.all([db.from('clusters').select('*').order('sort'),db.from('products').select('id,cluster_id,name,description,active,image_v,size_v').order('id'),db.from('variants').select('*').order('id'),db.from('settings').select('key,value').in('key',['wa_link','qris_v']),db.from(IMG).select('id,product_id,sort').order('sort').order('id')]);
+  return res.json({clusters:c.data||[],products:p.data||[],variants:v.data||[],images:im.data||[],settings:Object.fromEntries((s.data||[]).map(x=>[x.key,x.value]))});
  }
  const {a,t,row,id,rows,del,product_id}=req.body||{};
  if(a==='state_set'||a==='state_bulk'){
@@ -91,6 +92,31 @@ module.exports=async(req,res)=>{
   if(ins.length)ops.push(db.from('variants').insert(ins));
   const rs=await Promise.all(ops),e=rs.find(x=>x.error);
   return e?res.status(400).json({error:e.error.message}):res.json({ok:true});
+ }
+ /* foto produk: add = base64 baru, del = id dihapus, order = urutan (id lama atau 'n0','n1' untuk foto baru) */
+ if(a==='images'){
+  const pid=+product_id;
+  if(!pid)return res.status(400).json({error:'Produk tidak valid'});
+  const add=Array.isArray(req.body.add)?req.body.add:[],dels=(Array.isArray(req.body.del)?req.body.del:[]).map(Number).filter(Boolean),order=Array.isArray(req.body.order)?req.body.order:[];
+  if(add.some(d=>typeof d!=='string'||!/^data:image\//.test(d)))return res.status(400).json({error:'File foto tidak valid'});
+  if(dels.length){const r=await db.from(IMG).delete().in('id',dels).eq('product_id',pid);if(r.error)return res.status(400).json({error:r.error.message})}
+  const newIds=[];
+  for(const d of add){
+   const r=await db.from(IMG).insert({product_id:pid,data:d,sort:999}).select('id').single();
+   if(r.error)return res.status(400).json({error:r.error.message});
+   newIds.push(r.data.id);
+  }
+  const final=order.map(o=>typeof o==='string'&&o[0]==='n'?newIds[+o.slice(1)]:+o).filter(Boolean);
+  const rs=await Promise.all(final.map((fid,i)=>db.from(IMG).update({sort:i}).eq('id',fid).eq('product_id',pid)));
+  const e=rs.find(x=>x.error);
+  if(e)return res.status(400).json({error:e.error.message});
+  // foto pertama jadi foto utama: naikkan image_v supaya cache gambar utama diperbarui
+  const first=final[0];
+  if(first){
+   const f=await db.from(IMG).select('data').eq('id',first).single();
+   if(f.data&&f.data.data)await db.from('products').update({image:f.data.data,image_v:Date.now()}).eq('id',pid);
+  }
+  return res.json({ok:true});
  }
  if(a==='paid'||a==='cancel'){
   // klaim atomik: hanya satu request yang bisa mengubah status
