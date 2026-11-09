@@ -14,6 +14,7 @@ img{max-width:110px;border-radius:6px;display:block}.sticky{position:sticky;bott
 .rt{margin-top:4px}.rt th{background:#1b4fa8;color:#fff;padding:5px 6px;font-size:12px}.rt td{border-bottom:1px solid #eee;padding:4px 6px}.rt .n{text-align:right;white-space:nowrap}
 .rt tr.tt td{background:#eef;font-weight:700}.rt input{width:100%;margin:0;box-sizing:border-box}.rt input[type=number]{width:90px}
 .sx{padding:2px 9px;font-size:12px}.ok{color:#118a3e;font-weight:700}.bad{color:#d33;font-weight:700}.wr{color:#c2410c;font-weight:700}
+.rt tr.hl td{background:#fef08a}
 .rt tr.dn td{background:#dbeafe;color:#111;opacity:.72}
 #dm{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:20}.box2{background:#fff;border-radius:12px;padding:16px;max-width:340px;width:90%}
 </style>
@@ -40,7 +41,7 @@ async function loadOrders(more){
 function setSt(s){O.st=s;loadOrders()}
 function go(t){tab=t;E=null;ED=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else if(t==='r'||t==='d')loadRecap();else render()}
 function render(){
- $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button onclick="go('r')">Rekap</button><button style="background:#16a34a" onclick="go('d')">Distribusi Barang</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():tab==='r'?recapView():tab==='d'?distView():E?editor():list());if(tab==='d')applyDF();
+ $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button onclick="go('r')">Rekap</button><button style="background:#16a34a" onclick="go('d')">Distribusi Barang</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():tab==='r'?recapView():tab==='d'?distView():E?editor():list());if(tab==='d')applyDF();if(tab==='r')applyRF();
 }
 /* ---------- produk ---------- */
 function list(){
@@ -158,7 +159,7 @@ function stk(el){
  el.closest('tr').querySelector('.ks').innerHTML=stat(+el.dataset.q,k);
 }
 function viewBox(o){
- return `<div class=rb id=rb${o.id}><div class=row><b>${esc(o.name)}</b><span class=sm>${esc([o.prodi,o.gugus].filter(Boolean).join(' / '))} | WA: ${esc(o.phone)} | ${new Date(o.created_at).toLocaleDateString('id-ID')} | ${esc(o.status)}</span>${o.edited?'<span class=sm style="color:#c60">(diedit)</span>':''}<button class="g sx" onclick=edO(${o.id})>Edit</button></div><table class=rt><tr><th>Barang<th class=n>Jml<th class=n>Harga<th class=n>Subtotal</tr>${o.items.map(i=>`<tr><td>${esc(i.name)}<td class=n>${+i.qty||0}<td class=n>${(+i.price||0)?rp(i.price):'-'}<td class=n>${(+i.price||0)?rp(i.price*i.qty):'-'}</tr>`).join('')}<tr class=tt><td colspan=3 class=n>Total<td class=n>${rp(o.total)}</tr></table></div>`;
+ return `<div class=rb id=rb${o.id} data-p="${esc(pkey(o))}" data-b="${esc(o.items.map(i=>String(i.name).toLowerCase()).join('|'))}"><div class=row><b>${esc(o.name)}</b><span class=sm>${esc([o.prodi,o.gugus].filter(Boolean).join(' / '))} | WA: ${esc(o.phone)} | ${new Date(o.created_at).toLocaleDateString('id-ID')} | ${esc(o.status)}</span>${o.edited?'<span class=sm style="color:#c60">(diedit)</span>':''}<button class="g sx" onclick=edO(${o.id})>Edit</button></div><table class=rt><tr><th>Barang<th class=n>Jml<th class=n>Harga<th class=n>Subtotal</tr>${o.items.map(i=>`<tr data-n="${esc(String(i.name).toLowerCase())}"><td>${esc(i.name)}<td class=n>${+i.qty||0}<td class=n>${(+i.price||0)?rp(i.price):'-'}<td class=n>${(+i.price||0)?rp(i.price*i.qty):'-'}</tr>`).join('')}<tr class=tt><td colspan=3 class=n>Total<td class=n>${rp(o.total)}</tr></table></div>`;
 }
 function editBox(){
  const rows=ED.items.map((it,i)=>`<tr><td><input value="${esc(it.name)}" oninput="edIt(${i},'name',this.value)"><td><input type=number min=0 value="${it.qty}" oninput="edIt(${i},'qty',this.value)"><td><input type=number min=0 value="${it.price}" oninput="edIt(${i},'price',this.value)"><td class=n id=st${i}>${rp(it.qty*it.price)}<td><button class="r sx" onclick=edDel(${i})>x</button></tr>`).join('');
@@ -180,7 +181,7 @@ function rekapAdmin(){
  const L=RO.map(ov),m={};
  L.forEach(o=>o.items.forEach(i=>{const k=String(i.name),x=m[k]||(m[k]={q:0,r:0});x.q+=+i.qty||0;x.r+=(+i.qty||0)*(+i.price||0)}));
  const bl=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])),qB=sm(bl,e=>e[1].q),rB=sm(bl,e=>e[1].r);
- return `<div class=c><b style="font-size:17px">Rekap Admin (bisa diedit)</b><div class=sm>${L.length} pembeli · urut dari beli paling awal sampai terbaru. Hasil edit dan stok tersimpan di browser ini dan ikut ke file download.</div></div>
+ return `<div class=c><b style="font-size:17px">Rekap Admin (bisa diedit)</b><div class=sm>${L.length} pembeli · urut dari beli paling awal sampai terbaru. Hasil edit dan stok tersimpan di browser ini dan ikut ke file download.</div><div class=row style="margin-top:8px"><input placeholder="🔍 Cari orang (nama / gugus / WA)" value="${esc(RQP)}" oninput="RQP=this.value;applyRF()" style="min-width:230px"><input placeholder="🔍 Cari barang (mis. kaos polos L)" value="${esc(RQB)}" oninput="RQB=this.value;applyRF()" style="min-width:230px"></div><div id=rsum></div></div>
  <div class=c><b style="color:#1b4fa8">A. Pesanan per Pembeli</b>${L.map(o=>ED&&ED.id==o.id?editBox():viewBox(o)).join('')||'<div class=sm>Belum ada pesanan.</div>'}</div>
  <div class=c><b style="color:#1b4fa8">B. Resume per Barang</b><div class=sm>Isi kolom Stok dengan jumlah yang sudah kamu beli.</div><div style="overflow-x:auto"><table class=rt><tr><th>Barang<th class=n>Dibeli<th>Stok<th>Status<th class=n>Subtotal</tr>${bl.map(([k,x])=>`<tr><td>${esc(k)}<td class=n>${x.q}<td><input type=number min=0 data-n="${esc(k)}" data-q=${x.q} placeholder=0 value="${STK[k]??''}" oninput=stk(this)><td class=ks>${stat(x.q,k)}<td class=n>${x.r?rp(x.r):'-'}</tr>`).join('')}<tr class=tt><td>Total<td class=n>${qB}<td><td><td class=n>${rp(rB)}</tr></table></div></div>`;
 }
@@ -190,6 +191,24 @@ function recapView(){
  return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openPick()>Download rekap...</button> <button onclick="refreshRecap()">🔄 Refresh</button><div class=sm>${R.orders} pesanan dihitung (yang sudah kirim pesanan dianggap sudah bayar). Pesanan batal tidak ikut. Diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}, otomatis cek tiap 30 detik.</div></div>`+rekapAdmin()+
  `<div class=c><b>Ringkasan per produk &amp; varian</b></div>`+
  (R.products.map(p=>`<div class=c><b>${esc(p.name)}</b> &mdash; <b>${p.qty} unit</b> <span class=sm>${rp(p.rev)}</span>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div class=sm style="margin-top:6px">Per ${LBL[a]}:</div>${bd(p[a])}`:'').join('')}<div class=sm style="margin-top:6px">Per kombinasi:</div>${p.combos.map(c=>`<span class=tg>${esc(c.label)}: <b>${c.qty}</b></span>`).join('')}</div>`).join('')||'<div class=c>Belum ada pesanan.</div>');
+}
+/* ---------- pencarian rekap: orang & barang ---------- */
+let RQP='',RQB='';
+const pkey=o=>(o.name+' '+(o.prodi||'')+' '+(o.gugus||'')+' '+o.phone).toLowerCase();
+const mt=(t,q)=>q.split(/\s+/).filter(Boolean).every(w=>t.includes(w));
+function applyRF(){
+ const p=RQP.trim().toLowerCase(),b=RQB.trim().toLowerCase();
+ document.querySelectorAll('#app .rb[data-p]').forEach(e=>{
+  const ok=(!p||mt(e.dataset.p,p))&&(!b||e.dataset.b.split('|').some(n=>mt(n,b)));
+  e.style.display=ok?'':'none';
+  e.querySelectorAll('tr[data-n]').forEach(r=>r.classList.toggle('hl',!!b&&mt(r.dataset.n,b)));
+ });
+ const box=$('#rsum');if(!box)return;
+ if(!b){box.innerHTML=p?'<div class=sm style="margin-top:6px">Menampilkan pembeli yang cocok dengan pencarian orang.</div>':'';return}
+ const rows=[];
+ RO.map(ov).forEach(o=>{if(p&&!mt(pkey(o),p))return;o.items.forEach(i=>{if(mt(String(i.name).toLowerCase(),b))rows.push([o,i])})});
+ const u=new Set(rows.map(r=>r[0].id)).size,q=sm(rows,r=>+r[1].qty||0);
+ box.innerHTML=`<div style="background:#fffbe6;border-radius:8px;padding:8px;margin-top:8px"><b>Hasil barang "${esc(RQB)}"</b>: ${u} pembeli · <b>${q}</b> unit`+(rows.length?`<div style="overflow-x:auto"><table class=rt><tr><th>Pembeli<th>No. WA<th>Prodi / Gugus<th>Tanggal<th>Barang<th class=n>Jml</tr>${rows.map(([o,i])=>`<tr><td>${esc(o.name)}<td>${esc(o.phone)}<td>${esc([o.prodi,o.gugus].filter(Boolean).join(' / '))}<td>${new Date(o.created_at).toLocaleDateString('id-ID')}<td>${esc(i.name)}<td class=n>${+i.qty||0}</tr>`).join('')}</table></div>`:'<div class=sm>Tidak ada yang cocok.</div>')+'</div>';
 }
 /* ---------- distribusi barang ---------- */
 let DST={};try{DST=JSON.parse(localStorage.satset_dst||'{}')}catch(e){}
