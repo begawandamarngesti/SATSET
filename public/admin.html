@@ -1,4 +1,4 @@
-<!doctype html><html lang=id><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Admin v3</title>
+<!doctype html><html lang=id><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Admin v4 (server)</title>
 <style>
 body{font:15px system-ui;margin:0;background:#f4f4f8;color:#222}main{max-width:960px;margin:auto;padding:12px}
 .c{background:#fff;border-radius:10px;padding:12px;margin:10px 0}
@@ -136,6 +136,7 @@ let R=null,RO=null,ED=null,RS='';const LBL={model:'Model',size:'Ukuran',color:'W
 let EO={},STK={},DST={},SYNC=false,LOC={eo:{},stk:{},dst:{}};const PT={};
 try{LOC.eo=JSON.parse(localStorage.satset_eo||'{}');LOC.stk=JSON.parse(localStorage.satset_stk||'{}');LOC.dst=JSON.parse(localStorage.satset_dst||'{}')}catch(e){}
 const svLocal=()=>{try{localStorage.satset_eo=JSON.stringify(EO);localStorage.satset_stk=JSON.stringify(STK);localStorage.satset_dst=JSON.stringify(DST)}catch(e){}};
+const sbar=()=>SYNC?'<div class=c style="background:#dcfce7;border:2px solid #16a34a"><b style="color:#166534">✅ MODE SERVER (v4): edit, stok, dan centang tersimpan di server dan terlihat di semua laptop.</b></div>':'<div class=c style="background:#fee2e2;border:2px solid #dc2626"><b style="color:#b91c1c">⚠ MODE BROWSER SAJA: data cuma tersimpan di laptop ini dan TIDAK terlihat di laptop lain.</b><div class=sm style="color:#7f1d1d">Penyebab: file api/admin.js di server belum versi baru (belum ada w=state). Ganti api/admin.js dengan admin.js terbaru, tunggu deploy Vercel selesai, lalu hard refresh.</div></div>';
 const hasLoc=()=>SYNC&&Object.values(LOC).some(o=>Object.keys(o).length);
 /* data edit/stok/distribusi disimpan di server (tabel settings) supaya dipakai bersama; kalau API belum ditambah, otomatis pakai browser saja */
 async function loadState(){
@@ -213,7 +214,7 @@ function rekapAdmin(){
 function recapView(){
  if(!R||!R.products||!RO)return 'Rekap gagal dimuat.';
  const bd=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class=tg>${esc(k)}: <b>${v}</b></span>`).join('');
- return `<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openPick()>Download rekap...</button> <button onclick="refreshRecap()">🔄 Refresh</button><div class=sm>${R.orders} pesanan dihitung (yang sudah kirim pesanan dianggap sudah bayar). Pesanan batal tidak ikut. Diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}, otomatis cek tiap 30 detik.</div></div>`+rekapAdmin()+
+ return sbar()+`<div class=c><button class="${RS===''?'':'g'}" onclick="setRS('')">Menunggu + Lunas</button><button class="${RS==='lunas'?'':'g'}" onclick="setRS('lunas')">Lunas saja</button> <button class=g onclick=openPick()>Download rekap...</button> <button onclick="refreshRecap()">🔄 Refresh</button><div class=sm>${R.orders} pesanan dihitung (yang sudah kirim pesanan dianggap sudah bayar). Pesanan batal tidak ikut. Diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}, otomatis cek tiap 30 detik.</div></div>`+rekapAdmin()+
  `<div class=c><b>Ringkasan per produk &amp; varian</b></div>`+
  (R.products.map(p=>`<div class=c><b>${esc(p.name)}</b> &mdash; <b>${p.qty} unit</b> <span class=sm>${rp(p.rev)}</span>${['model','size','color'].map(a=>Object.keys(p[a]).length?`<div class=sm style="margin-top:6px">Per ${LBL[a]}:</div>${bd(p[a])}`:'').join('')}<div class=sm style="margin-top:6px">Per kombinasi:</div>${p.combos.map(c=>`<span class=tg>${esc(c.label)}: <b>${c.qty}</b></span>`).join('')}</div>`).join('')||'<div class=c>Belum ada pesanan.</div>');
 }
@@ -255,7 +256,7 @@ function dResume(){
 function distView(){
  if(!RO)return 'Memuat...';
  const L=RO.map(ov);
- return `<div class=c><div class=row><button onclick="refreshRecap()">🔄 Refresh</button><input id=dq placeholder="🔍 Cari nama / gugus / WA" value="${esc(DQ)}" oninput="DQ=this.value;applyDF()" style="min-width:220px"><label class=row style="gap:4px;margin:0"><input type=checkbox ${DH?'checked':''} onchange="DH=this.checked;applyDF()"> Sembunyikan yang sudah selesai</label></div><div class=sm>${L.length} pembeli · urut dari beli paling awal · diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}. ${SYNC?'Tersimpan di server (dipakai bersama).':'Tersimpan di browser ini saja.'}</div>${migBtn()}</div>
+ return sbar()+`<div class=c><div class=row><button onclick="refreshRecap()">🔄 Refresh</button><input id=dq placeholder="🔍 Cari nama / gugus / WA" value="${esc(DQ)}" oninput="DQ=this.value;applyDF()" style="min-width:220px"><label class=row style="gap:4px;margin:0"><input type=checkbox ${DH?'checked':''} onchange="DH=this.checked;applyDF()"> Sembunyikan yang sudah selesai</label></div><div class=sm>${L.length} pembeli · urut dari beli paling awal · diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}. ${SYNC?'Tersimpan di server (dipakai bersama).':'Tersimpan di browser ini saja.'}</div>${migBtn()}</div>
  <div class=c><b style="color:#118a3e;font-size:17px">Distribusi per Pembeli</b>${L.map(o=>dBox(o)).join('')||'<div class=sm>Belum ada pesanan.</div>'}</div>
  <div class=c><b style="color:#118a3e;font-size:17px">Resume Barang</b><div id=dres>${dResume()}</div></div>`;
 }
