@@ -133,14 +133,15 @@ async function saveSet(){const b=$('#ss');b.disabled=true;b.textContent='Menyimp
 /* ---------- rekap ---------- */
 let R=null,RO=null,ED=null,RS='';const LBL={model:'Model',size:'Ukuran',color:'Warna'};
 /* edit pesanan & stok disimpan di browser ini (localStorage) */
-let EO={},STK={},DST={},SYNC=false,LOC={eo:{},stk:{},dst:{}};const PT={};
+let DBG='',EO={},STK={},DST={},SYNC=false,LOC={eo:{},stk:{},dst:{}};const PT={};
 try{LOC.eo=JSON.parse(localStorage.satset_eo||'{}');LOC.stk=JSON.parse(localStorage.satset_stk||'{}');LOC.dst=JSON.parse(localStorage.satset_dst||'{}')}catch(e){}
 const svLocal=()=>{try{localStorage.satset_eo=JSON.stringify(EO);localStorage.satset_stk=JSON.stringify(STK);localStorage.satset_dst=JSON.stringify(DST)}catch(e){}};
-const sbar=()=>SYNC?'<div class=c style="background:#dcfce7;border:2px solid #16a34a"><b style="color:#166534">✅ MODE SERVER (v4): edit, stok, dan centang tersimpan di server dan terlihat di semua laptop.</b></div>':'<div class=c style="background:#fee2e2;border:2px solid #dc2626"><b style="color:#b91c1c">⚠ MODE BROWSER SAJA: data cuma tersimpan di laptop ini dan TIDAK terlihat di laptop lain.</b><div class=sm style="color:#7f1d1d">Penyebab: file api/admin.js di server belum versi baru (belum ada w=state). Ganti api/admin.js dengan admin.js terbaru, tunggu deploy Vercel selesai, lalu hard refresh.</div></div>';
+const sbar=()=>SYNC?'<div class=c style="background:#dcfce7;border:2px solid #16a34a"><b style="color:#166534">✅ MODE SERVER (v4): edit, stok, dan centang tersimpan di server dan terlihat di semua laptop.</b></div>':'<div class=c style="background:#fee2e2;border:2px solid #dc2626"><b style="color:#b91c1c">⚠ MODE BROWSER SAJA: data cuma tersimpan di laptop ini dan TIDAK terlihat di laptop lain.</b><div class=sm style="color:#7f1d1d">Penyebab: file api/admin.js di server belum versi baru (belum ada w=state). Ganti api/admin.js dengan admin.js terbaru, tunggu deploy Vercel selesai, lalu hard refresh.</div><div class=sm style="color:#7f1d1d;margin-top:4px">Respon server untuk w=state: <code>'+esc(DBG)+'</code></div></div>';
 const hasLoc=()=>SYNC&&Object.values(LOC).some(o=>Object.keys(o).length);
 /* data edit/stok/distribusi disimpan di server (tabel settings) supaya dipakai bersama; kalau API belum ditambah, otomatis pakai browser saja */
 async function loadState(){
- const st=await api(null,'?w=state');
+ let st;try{st=await api(null,'?w=state')}catch(e){st={error:String(e)}}
+ DBG=JSON.stringify(st).slice(0,160);
  if(st&&st.eo&&st.stk&&st.dst){EO=st.eo;STK=st.stk;DST=st.dst;SYNC=true}
  else{SYNC=false;EO=LOC.eo;STK=LOC.stk;DST=LOC.dst}
 }
