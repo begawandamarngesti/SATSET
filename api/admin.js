@@ -1,10 +1,52 @@
 const {db,isAdmin}=require('./_lib');
 const {syncOrder}=require('./_sheet');
 const T=['clusters','products'],OF='id,created_at,name,phone,items,status,prodi,gugus';
+
+/* data edit pesanan, stok, dan centang distribusi (dipakai bersama) disimpan di tabel settings: key eo:/stk:/dst: */
+async function getState(){
+ const out={eo:{},stk:{},dst:{}};
+ for(const p of ['eo','stk','dst']){
+  for(let f=0;;f+=1000){
+   const r=await db.from('settings').select('key,value').like('key',p+':%').range(f,f+999);
+   const d=r.data||[];
+   d.forEach(x=>{try{out[p][x.key.slice(p.length+1)]=typeof x.value==='string'?JSON.parse(x.value):x.value}catch(e){}});
+   if(d.length<1000)break;
+  }
+ }
+ return out;
+}
+
+/* rekap per produk & varian (pesanan batal tidak dihitung) */
+async function getRecap(status){
+ const sts=status==='lunas'?['lunas']:['menunggu','lunas'];
+ let os=[];
+ for(let f=0;;f+=1000){
+  const r=await db.from('orders').select('id,items').in('status',sts).order('id').range(f,f+999);
+  const d=r.data||[];os=os.concat(d);if(d.length<1000)break;
+ }
+ const [p,v]=await Promise.all([db.from('products').select('id,name'),db.from('variants').select('id,product_id,model,size,color,price')]);
+ const pm=new Map((p.data||[]).map(x=>[x.id,x])),vm=new Map((v.data||[]).map(x=>[x.id,x]));
+ const out=new Map(),inc=(o,k,n)=>{o[k]=(o[k]||0)+n};
+ for(const o of os)for(const l of o.items||[]){
+  const q=+l.qty||0,pr=+l.price||0,va=vm.get(l.variant_id),pd=va&&pm.get(va.product_id),key=pd?'p'+pd.id:'n'+l.name;
+  let e=out.get(key);
+  if(!e){e={name:pd?pd.name:String(l.name),qty:0,rev:0,model:{},size:{},color:{},c:{}};out.set(key,e)}
+  e.qty+=q;e.rev+=q*pr;
+  if(va){
+   if(va.model)inc(e.model,va.model,q);if(va.size)inc(e.size,va.size,q);if(va.color)inc(e.color,va.color,q);
+   inc(e.c,[va.model,va.size,va.color].filter(Boolean).join(' / ')||'Standar',q);
+  }else inc(e.c,String(l.name),q);
+ }
+ const products=[...out.values()].map(e=>({name:e.name,qty:e.qty,rev:e.rev,model:e.model,size:e.size,color:e.color,combos:Object.entries(e.c).sort((a,b)=>b[1]-a[1]).map(([label,qty])=>({label,qty}))})).sort((a,b)=>b.qty-a.qty);
+ return {orders:os.length,products};
+}
+
 module.exports=async(req,res)=>{
  if(!isAdmin(req))return res.status(401).json({error:'Password salah'});
  if(req.method==='GET'){
   const w=req.query.w;
+  if(w==='state')return res.json(await getState());
+  if(w==='recap')return res.json(await getRecap(req.query.status));
   if(w==='orders'){
    let q=db.from('orders').select(OF+',total,sheet_ok').order('id',{ascending:false}).limit(40);
    if(req.query.status)q=q.eq('status',req.query.status);
@@ -14,24 +56,22 @@ module.exports=async(req,res)=>{
    return res.json({orders:o.data||[],counts:cnt&&{menunggu:cnt[0].count,lunas:cnt[1].count,batal:cnt[2].count}});
   }
   if(w==='proof'){const o=await db.from('orders').select('proof').eq('id',+req.query.id).single();return res.json({proof:o.data&&o.data.proof})}
-  if(w==='recap'){
-   let q=db.from('orders').select('items').order('id',{ascending:false}).limit(5000);
-   q=req.query.status==='lunas'?q.eq('status','lunas'):q.in('status',['menunggu','lunas']);
-   const r=await q;if(r.error)return res.status(500).json({error:r.error.message});
-   const P={};let n=0;
-   for(const o of r.data||[]){n++;for(const i of o.items||[]){
-    const k=i.pname||i.name,u=+i.qty||0,p=P[k]||(P[k]={name:k,qty:0,rev:0,model:{},size:{},color:{},combos:{}});
-    p.qty+=u;p.rev+=u*(+i.price||0);
-    for(const a of ['model','size','color'])if(i[a])p[a][i[a]]=(p[a][i[a]]||0)+u;
-    const ck=[i.model,i.size,i.color].filter(Boolean).join(' / ')||'Tanpa varian',cc=p.combos[ck]||(p.combos[ck]={label:ck,model:i.model||'',size:i.size||'',color:i.color||'',qty:0});cc.qty+=u;
-   }}
-   const products=Object.values(P).map(p=>({...p,combos:Object.values(p.combos).sort((a,b)=>b.qty-a.qty)})).sort((a,b)=>b.qty-a.qty);
-   return res.json({orders:n,products});
-  }
-  const [c,p,v,s,im]=await Promise.all([db.from('clusters').select('*').order('sort'),db.from('products').select('id,cluster_id,name,description,active,image_v,size_v').order('id'),db.from('variants').select('*').order('id'),db.from('settings').select('key,value').in('key',['wa_link','qris_v']),db.from('product_images').select('id,product_id,pos').order('pos').order('id')]);
-  return res.json({clusters:c.data||[],products:p.data||[],variants:v.data||[],images:(im&&im.data)||[],settings:Object.fromEntries((s.data||[]).map(x=>[x.key,x.value]))});
+  const [c,p,v,s]=await Promise.all([db.from('clusters').select('*').order('sort'),db.from('products').select('id,cluster_id,name,description,active,image_v,size_v').order('id'),db.from('variants').select('*').order('id'),db.from('settings').select('key,value').in('key',['wa_link','qris_v'])]);
+  return res.json({clusters:c.data||[],products:p.data||[],variants:v.data||[],settings:Object.fromEntries((s.data||[]).map(x=>[x.key,x.value]))});
  }
  const {a,t,row,id,rows,del,product_id}=req.body||{};
+ if(a==='state_set'||a==='state_bulk'){
+  const K=['eo','stk','dst'],list=a==='state_bulk'?(req.body.items||[]):[{kind:req.body.kind,k:req.body.k,v:req.body.v}];
+  const ups=[],dels=[];
+  for(const x of list){
+   if(!K.includes(x.kind)||typeof x.k!=='string'||!x.k||x.k.length>180)return res.status(400).json({error:'Data tidak valid'});
+   const key=x.kind+':'+x.k;
+   if(x.v==null)dels.push(key);else ups.push({key,value:JSON.stringify(x.v)});
+  }
+  if(dels.length){const r=await db.from('settings').delete().in('key',dels);if(r.error)return res.status(400).json({error:r.error.message})}
+  if(ups.length){const r=await db.from('settings').upsert(ups);if(r.error)return res.status(400).json({error:r.error.message})}
+  return res.json({ok:true});
+ }
  if(a==='save'&&T.includes(t)){const r=await db.from(t).upsert(row).select('id').single();return r.error?res.status(400).json({error:r.error.message}):res.json(r.data)}
  if(a==='del'&&T.includes(t)){await db.from(t).delete().eq('id',id);return res.json({ok:true})}
  if(a==='settings'){
@@ -51,20 +91,6 @@ module.exports=async(req,res)=>{
   if(ins.length)ops.push(db.from('variants').insert(ins));
   const rs=await Promise.all(ops),e=rs.find(x=>x.error);
   return e?res.status(400).json({error:e.error.message}):res.json({ok:true});
- }
- if(a==='images'){
-  const pid=+product_id,B=req.body;
-  const add=(B.add||[]).filter(x=>typeof x==='string'&&/^data:image\//.test(x)&&x.length<1.5e6);
-  const delIds=(B.del||[]).map(Number).filter(n=>n>0),order=Array.isArray(B.order)?B.order:[];
-  if(delIds.length){const d=await db.from('product_images').delete().in('id',delIds).eq('product_id',pid);if(d.error)return res.status(400).json({error:d.error.message})}
-  const cnt=await db.from('product_images').select('id',{count:'exact',head:true}).eq('product_id',pid);
-  if(cnt.error)return res.status(400).json({error:cnt.error.message});
-  if((cnt.count||0)+add.length>10)return res.status(400).json({error:'Maksimal 10 foto per produk'});
-  let ids=[];
-  if(add.length){const r=await db.from('product_images').insert(add.map((d,i)=>({product_id:pid,pos:100+i,data:d}))).select('id');if(r.error)return res.status(400).json({error:r.error.message});ids=(r.data||[]).map(x=>x.id).sort((x,y)=>x-y)}
-  const pos=order.map((t,i)=>{const id=typeof t==='string'&&t[0]==='n'?ids[+t.slice(1)]:+t;return id?{id,pos:i}:null}).filter(Boolean);
-  const us=await Promise.all(pos.map(x=>db.from('product_images').update({pos:x.pos}).eq('id',x.id).eq('product_id',pid)));
-  const e=us.find(x=>x.error);return e?res.status(400).json({error:e.error.message}):res.json({ok:true});
  }
  if(a==='paid'||a==='cancel'){
   // klaim atomik: hanya satu request yang bisa mengubah status
