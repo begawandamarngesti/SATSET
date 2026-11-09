@@ -133,18 +133,43 @@ async function saveSet(){const b=$('#ss');b.disabled=true;b.textContent='Menyimp
 /* ---------- rekap ---------- */
 let R=null,RO=null,ED=null,RS='';const LBL={model:'Model',size:'Ukuran',color:'Warna'};
 /* edit pesanan & stok disimpan di browser ini (localStorage) */
-let EO={},STK={};try{EO=JSON.parse(localStorage.satset_eo||'{}');STK=JSON.parse(localStorage.satset_stk||'{}')}catch(e){}
-const svEO=()=>{try{localStorage.satset_eo=JSON.stringify(EO)}catch(e){}},svSTK=()=>{try{localStorage.satset_stk=JSON.stringify(STK)}catch(e){}};
+let EO={},STK={},DST={},SYNC=false,LOC={eo:{},stk:{},dst:{}};const PT={};
+try{LOC.eo=JSON.parse(localStorage.satset_eo||'{}');LOC.stk=JSON.parse(localStorage.satset_stk||'{}');LOC.dst=JSON.parse(localStorage.satset_dst||'{}')}catch(e){}
+const svLocal=()=>{try{localStorage.satset_eo=JSON.stringify(EO);localStorage.satset_stk=JSON.stringify(STK);localStorage.satset_dst=JSON.stringify(DST)}catch(e){}};
+const hasLoc=()=>SYNC&&Object.values(LOC).some(o=>Object.keys(o).length);
+/* data edit/stok/distribusi disimpan di server (tabel settings) supaya dipakai bersama; kalau API belum ditambah, otomatis pakai browser saja */
+async function loadState(){
+ const st=await api(null,'?w=state');
+ if(st&&st.eo&&st.stk&&st.dst){EO=st.eo;STK=st.stk;DST=st.dst;SYNC=true}
+ else{SYNC=false;EO=LOC.eo;STK=LOC.stk;DST=LOC.dst}
+}
+async function pst(kind,k,v){
+ const M=kind==='eo'?EO:kind==='stk'?STK:DST;
+ if(v==null)delete M[k];else M[k]=v;
+ if(!SYNC){svLocal();return}
+ const r=await api({a:'state_set',kind,k,v:v==null?null:v});
+ if(!r||!r.ok)alert('Gagal menyimpan ke server. Coba lagi.');
+}
+function stkSave(k,v){clearTimeout(PT[k]);PT[k]=setTimeout(()=>{delete PT[k];pst('stk',k,v)},500)}
+const migBtn=()=>hasLoc()?`<div style="margin-top:6px"><button class=g onclick=migrate()>⬆ Kirim data edit/stok/centang dari browser ini ke server</button></div>`:'';
+async function migrate(){
+ const it=[];for(const kd of ['eo','stk','dst'])for(const [k,v] of Object.entries(LOC[kd]))it.push({kind:kd,k,v});
+ if(!it.length)return;
+ if(!confirm('Kirim '+it.length+' data dari browser ini ke server? Data di server dengan kunci yang sama akan tertimpa.'))return;
+ for(let i=0;i<it.length;i+=100){const r=await api({a:'state_bulk',items:it.slice(i,i+100)});if(!r||!r.ok)return}
+ try{localStorage.removeItem('satset_eo');localStorage.removeItem('satset_stk');localStorage.removeItem('satset_dst')}catch(e){}
+ LOC={eo:{},stk:{},dst:{}};await loadRecap();alert('Data terkirim ke server.');
+}
 const tot=it=>it.reduce((s,i)=>s+(+i.qty||0)*(+i.price||0),0);
 const ov=o=>{const e=EO[o.id];return e?{...o,name:e.name,items:e.items,total:tot(e.items),edited:true}:o};
 const byDate=(a,b)=>(new Date(a.created_at)-new Date(b.created_at))||(a.id-b.id);
-async function loadRecap(){R=null;RO=null;$('#app').innerHTML='Memuat rekap...';R=await api(null,'?w=recap&status='+RS);RO=(await allRaw()).sort(byDate);RT=new Date();render()}
+async function loadRecap(){R=null;RO=null;$('#app').innerHTML='Memuat rekap...';await loadState();R=await api(null,'?w=recap&status='+RS);RO=(await allRaw()).sort(byDate);RT=new Date();render()}
 function setRS(s){RS=s;ED=null;loadRecap()}
 let RT=null,rbusy=false;
 async function refreshRecap(silent){
  if(rbusy)return;rbusy=true;
  try{
-  const r=await api(null,'?w=recap&status='+RS),o=(await allRaw()).sort(byDate);
+  if(Object.keys(PT).length)await new Promise(z=>setTimeout(z,900));await loadState();const r=await api(null,'?w=recap&status='+RS),o=(await allRaw()).sort(byDate);
   R=r;RO=o;RT=new Date();if(tab==='r'||tab==='d')render();
  }finally{rbusy=false}
 }
@@ -155,7 +180,7 @@ function stat(q,k){
  const d=q-s;return d>0?`<span class=bad>Kurang ${d}</span>`:d===0?'<span class=ok>Aman</span>':`<span class=ok>Aman (lebih ${-d})</span>`;
 }
 function stk(el){
- const k=el.dataset.n;if(el.value==='')delete STK[k];else STK[k]=Math.max(0,+el.value||0);svSTK();
+ const k=el.dataset.n;const v=el.value===''?null:Math.max(0,+el.value||0);if(v===null)delete STK[k];else STK[k]=v;stkSave(k,v);
  el.closest('tr').querySelector('.ks').innerHTML=stat(+el.dataset.q,k);
 }
 function viewBox(o){
@@ -170,18 +195,18 @@ function edIt(i,f,v){const it=ED.items[i];it[f]=f==='name'?v:(+v||0);$('#st'+i).
 function refreshBox(){$('#rb'+ED.id).outerHTML=editBox()}
 function edAdd(){ED.items.push({name:'',qty:1,price:0});refreshBox()}
 function edDel(i){ED.items.splice(i,1);refreshBox()}
-function edSave(){
+async function edSave(){
  const items=ED.items.filter(i=>String(i.name).trim()).map(i=>({name:String(i.name).trim(),qty:+i.qty||0,price:+i.price||0}));
  if(!items.length)return alert('Minimal harus ada 1 barang.');
- EO[ED.id]={name:ED.name.trim()||'(tanpa nama)',items};svEO();ED=null;render();
+ await pst('eo',String(ED.id),{name:ED.name.trim()||'(tanpa nama)',items});ED=null;render();
 }
 function edCancel(){ED=null;render()}
-function edReset(){if(!confirm('Kembalikan pesanan ini ke data asli?'))return;delete EO[ED.id];svEO();ED=null;render()}
+function edReset(){if(!confirm('Kembalikan pesanan ini ke data asli?'))return;pst('eo',String(ED.id),null);ED=null;render()}
 function rekapAdmin(){
  const L=RO.map(ov),m={};
  L.forEach(o=>o.items.forEach(i=>{const k=String(i.name),x=m[k]||(m[k]={q:0,r:0});x.q+=+i.qty||0;x.r+=(+i.qty||0)*(+i.price||0)}));
  const bl=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])),qB=sm(bl,e=>e[1].q),rB=sm(bl,e=>e[1].r);
- return `<div class=c><b style="font-size:17px">Rekap Admin (bisa diedit)</b><div class=sm>${L.length} pembeli · urut dari beli paling awal sampai terbaru. Hasil edit dan stok tersimpan di browser ini dan ikut ke file download.</div><div class=row style="margin-top:8px"><input placeholder="🔍 Cari orang (nama / gugus / WA)" value="${esc(RQP)}" oninput="RQP=this.value;applyRF()" style="min-width:230px"><input placeholder="🔍 Cari barang (mis. kaos polos L)" value="${esc(RQB)}" oninput="RQB=this.value;applyRF()" style="min-width:230px"></div><div id=rsum></div></div>
+ return `<div class=c><b style="font-size:17px">Rekap Admin (bisa diedit)</b><div class=sm>${L.length} pembeli · urut dari beli paling awal sampai terbaru. ${SYNC?'Hasil edit, stok, dan centang distribusi tersimpan di server (dipakai bersama)':'Hasil edit dan stok tersimpan di browser ini saja'} dan ikut ke file download.</div><div class=row style="margin-top:8px"><input placeholder="🔍 Cari orang (nama / gugus / WA)" value="${esc(RQP)}" oninput="RQP=this.value;applyRF()" style="min-width:230px"><input placeholder="🔍 Cari barang (mis. kaos polos L)" value="${esc(RQB)}" oninput="RQB=this.value;applyRF()" style="min-width:230px"></div>${migBtn()}<div id=rsum></div></div>
  <div class=c><b style="color:#1b4fa8">A. Pesanan per Pembeli</b>${L.map(o=>ED&&ED.id==o.id?editBox():viewBox(o)).join('')||'<div class=sm>Belum ada pesanan.</div>'}</div>
  <div class=c><b style="color:#1b4fa8">B. Resume per Barang</b><div class=sm>Isi kolom Stok dengan jumlah yang sudah kamu beli.</div><div style="overflow-x:auto"><table class=rt><tr><th>Barang<th class=n>Dibeli<th>Stok<th>Status<th class=n>Subtotal</tr>${bl.map(([k,x])=>`<tr><td>${esc(k)}<td class=n>${x.q}<td><input type=number min=0 data-n="${esc(k)}" data-q=${x.q} placeholder=0 value="${STK[k]??''}" oninput=stk(this)><td class=ks>${stat(x.q,k)}<td class=n>${x.r?rp(x.r):'-'}</tr>`).join('')}<tr class=tt><td>Total<td class=n>${qB}<td><td><td class=n>${rp(rB)}</tr></table></div></div>`;
 }
@@ -211,8 +236,6 @@ function applyRF(){
  box.innerHTML=`<div style="background:#fffbe6;border-radius:8px;padding:8px;margin-top:8px"><b>Hasil barang "${esc(RQB)}"</b>: ${u} pembeli · <b>${q}</b> unit`+(rows.length?`<div style="overflow-x:auto"><table class=rt><tr><th>Pembeli<th>No. WA<th>Prodi / Gugus<th>Tanggal<th>Barang<th class=n>Jml</tr>${rows.map(([o,i])=>`<tr><td>${esc(o.name)}<td>${esc(o.phone)}<td>${esc([o.prodi,o.gugus].filter(Boolean).join(' / '))}<td>${new Date(o.created_at).toLocaleDateString('id-ID')}<td>${esc(i.name)}<td class=n>${+i.qty||0}</tr>`).join('')}</table></div>`:'<div class=sm>Tidak ada yang cocok.</div>')+'</div>';
 }
 /* ---------- distribusi barang ---------- */
-let DST={};try{DST=JSON.parse(localStorage.satset_dst||'{}')}catch(e){}
-const svDST=()=>{try{localStorage.satset_dst=JSON.stringify(DST)}catch(e){}};
 const dk=(o,i)=>o.id+'|'+i.name;
 const dgot=(o,i)=>Math.min(+DST[dk(o,i)]||0,+i.qty||0);
 const dfull=(o,i)=>(+i.qty||0)>0&&dgot(o,i)>=(+i.qty||0);
@@ -232,7 +255,7 @@ function dResume(){
 function distView(){
  if(!RO)return 'Memuat...';
  const L=RO.map(ov);
- return `<div class=c><div class=row><button onclick="refreshRecap()">🔄 Refresh</button><input id=dq placeholder="🔍 Cari nama / gugus / WA" value="${esc(DQ)}" oninput="DQ=this.value;applyDF()" style="min-width:220px"><label class=row style="gap:4px;margin:0"><input type=checkbox ${DH?'checked':''} onchange="DH=this.checked;applyDF()"> Sembunyikan yang sudah selesai</label></div><div class=sm>${L.length} pembeli · urut dari beli paling awal · diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}. Centang tersimpan di browser ini.</div></div>
+ return `<div class=c><div class=row><button onclick="refreshRecap()">🔄 Refresh</button><input id=dq placeholder="🔍 Cari nama / gugus / WA" value="${esc(DQ)}" oninput="DQ=this.value;applyDF()" style="min-width:220px"><label class=row style="gap:4px;margin:0"><input type=checkbox ${DH?'checked':''} onchange="DH=this.checked;applyDF()"> Sembunyikan yang sudah selesai</label></div><div class=sm>${L.length} pembeli · urut dari beli paling awal · diperbarui ${RT?RT.toLocaleTimeString('id-ID'):'-'}. ${SYNC?'Tersimpan di server (dipakai bersama).':'Tersimpan di browser ini saja.'}</div>${migBtn()}</div>
  <div class=c><b style="color:#118a3e;font-size:17px">Distribusi per Pembeli</b>${L.map(o=>dBox(o)).join('')||'<div class=sm>Belum ada pesanan.</div>'}</div>
  <div class=c><b style="color:#118a3e;font-size:17px">Resume Barang</b><div id=dres>${dResume()}</div></div>`;
 }
@@ -248,7 +271,7 @@ function dClick(id,x){
  const o=ordOf(id),i=o.items[x];
  if(dfull(o,i)){
   if(!confirm('Yakin membatalkan distribusi "'+i.name+'" untuk '+o.name+'?'))return;
-  delete DST[dk(o,i)];svDST();refreshD(id);return;
+  pst('dst',dk(o,i),null);refreshD(id);return;
  }
  const q=+i.qty||0,g=dgot(o,i);
  $('#dm').style.display='flex';
@@ -259,8 +282,7 @@ function dmX(){$('#dm').style.display='none';$('#dm').innerHTML=''}
 function dmSave(id,x){
  const o=ordOf(id),i=o.items[x],q=+i.qty||0;let v=Math.floor(+$('#dmq').value);
  if(isNaN(v)||v<0)v=0;if(v>q)v=q;
- if(v>0)DST[dk(o,i)]=v;else delete DST[dk(o,i)];
- svDST();dmX();refreshD(id);
+ pst('dst',dk(o,i),v>0?v:null);dmX();refreshD(id);
 }
 /* ---------- download rekap (popup pilihan) ---------- */
 async function allRaw(){
