@@ -1,10 +1,52 @@
 const {db,isAdmin}=require('./_lib');
 const {syncOrder}=require('./_sheet');
 const T=['clusters','products'],OF='id,created_at,name,phone,items,status,prodi,gugus';
+
+/* data edit pesanan, stok, dan centang distribusi (dipakai bersama) disimpan di tabel settings: key eo:/stk:/dst: */
+async function getState(){
+ const out={eo:{},stk:{},dst:{}};
+ for(const p of ['eo','stk','dst']){
+  for(let f=0;;f+=1000){
+   const r=await db.from('settings').select('key,value').like('key',p+':%').range(f,f+999);
+   const d=r.data||[];
+   d.forEach(x=>{try{out[p][x.key.slice(p.length+1)]=typeof x.value==='string'?JSON.parse(x.value):x.value}catch(e){}});
+   if(d.length<1000)break;
+  }
+ }
+ return out;
+}
+
+/* rekap per produk & varian (pesanan batal tidak dihitung) */
+async function getRecap(status){
+ const sts=status==='lunas'?['lunas']:['menunggu','lunas'];
+ let os=[];
+ for(let f=0;;f+=1000){
+  const r=await db.from('orders').select('id,items').in('status',sts).order('id').range(f,f+999);
+  const d=r.data||[];os=os.concat(d);if(d.length<1000)break;
+ }
+ const [p,v]=await Promise.all([db.from('products').select('id,name'),db.from('variants').select('id,product_id,model,size,color,price')]);
+ const pm=new Map((p.data||[]).map(x=>[x.id,x])),vm=new Map((v.data||[]).map(x=>[x.id,x]));
+ const out=new Map(),inc=(o,k,n)=>{o[k]=(o[k]||0)+n};
+ for(const o of os)for(const l of o.items||[]){
+  const q=+l.qty||0,pr=+l.price||0,va=vm.get(l.variant_id),pd=va&&pm.get(va.product_id),key=pd?'p'+pd.id:'n'+l.name;
+  let e=out.get(key);
+  if(!e){e={name:pd?pd.name:String(l.name),qty:0,rev:0,model:{},size:{},color:{},c:{}};out.set(key,e)}
+  e.qty+=q;e.rev+=q*pr;
+  if(va){
+   if(va.model)inc(e.model,va.model,q);if(va.size)inc(e.size,va.size,q);if(va.color)inc(e.color,va.color,q);
+   inc(e.c,[va.model,va.size,va.color].filter(Boolean).join(' / ')||'Standar',q);
+  }else inc(e.c,String(l.name),q);
+ }
+ const products=[...out.values()].map(e=>({name:e.name,qty:e.qty,rev:e.rev,model:e.model,size:e.size,color:e.color,combos:Object.entries(e.c).sort((a,b)=>b[1]-a[1]).map(([label,qty])=>({label,qty}))})).sort((a,b)=>b.qty-a.qty);
+ return {orders:os.length,products};
+}
+
 module.exports=async(req,res)=>{
  if(!isAdmin(req))return res.status(401).json({error:'Password salah'});
  if(req.method==='GET'){
   const w=req.query.w;
+  if(w==='state')return res.json(await getState());
+  if(w==='recap')return res.json(await getRecap(req.query.status));
   if(w==='orders'){
    let q=db.from('orders').select(OF+',total,sheet_ok').order('id',{ascending:false}).limit(40);
    if(req.query.status)q=q.eq('status',req.query.status);
@@ -18,6 +60,18 @@ module.exports=async(req,res)=>{
   return res.json({clusters:c.data||[],products:p.data||[],variants:v.data||[],settings:Object.fromEntries((s.data||[]).map(x=>[x.key,x.value]))});
  }
  const {a,t,row,id,rows,del,product_id}=req.body||{};
+ if(a==='state_set'||a==='state_bulk'){
+  const K=['eo','stk','dst'],list=a==='state_bulk'?(req.body.items||[]):[{kind:req.body.kind,k:req.body.k,v:req.body.v}];
+  const ups=[],dels=[];
+  for(const x of list){
+   if(!K.includes(x.kind)||typeof x.k!=='string'||!x.k||x.k.length>180)return res.status(400).json({error:'Data tidak valid'});
+   const key=x.kind+':'+x.k;
+   if(x.v==null)dels.push(key);else ups.push({key,value:JSON.stringify(x.v)});
+  }
+  if(dels.length){const r=await db.from('settings').delete().in('key',dels);if(r.error)return res.status(400).json({error:r.error.message})}
+  if(ups.length){const r=await db.from('settings').upsert(ups);if(r.error)return res.status(400).json({error:r.error.message})}
+  return res.json({ok:true});
+ }
  if(a==='save'&&T.includes(t)){const r=await db.from(t).upsert(row).select('id').single();return r.error?res.status(400).json({error:r.error.message}):res.json(r.data)}
  if(a==='del'&&T.includes(t)){await db.from(t).delete().eq('id',id);return res.json({ok:true})}
  if(a==='settings'){
