@@ -3,10 +3,10 @@ const {syncOrder}=require('./_sheet');
 const T=['clusters','products'],OF='id,created_at,name,phone,items,status,prodi,gugus';
 const IMG='product_images'; // ganti kalau nama tabel foto lu beda
 
-/* data edit pesanan, stok, dan centang distribusi (dipakai bersama) disimpan di tabel settings: key eo:/stk:/dst: */
+/* data edit pesanan, stok, centang distribusi, dan supply monitor (dipakai bersama) disimpan di tabel settings: key eo:/stk:/dst:/sup: */
 async function getState(){
- const out={eo:{},stk:{},dst:{}};
- for(const p of ['eo','stk','dst']){
+ const out={eo:{},stk:{},dst:{},sup:{}};
+ for(const p of ['eo','stk','dst','sup']){
   for(let f=0;;f+=1000){
    const r=await db.from('settings').select('key,value').like('key',p+':%').range(f,f+999);
    const d=r.data||[];
@@ -62,7 +62,7 @@ module.exports=async(req,res)=>{
  }
  const {a,t,row,id,rows,del,product_id}=req.body||{};
  if(a==='state_set'||a==='state_bulk'){
-  const K=['eo','stk','dst'],list=a==='state_bulk'?(req.body.items||[]):[{kind:req.body.kind,k:req.body.k,v:req.body.v}];
+  const K=['eo','stk','dst','sup'],list=a==='state_bulk'?(req.body.items||[]):[{kind:req.body.kind,k:req.body.k,v:req.body.v}];
   const ups=[],dels=[];
   for(const x of list){
    if(!K.includes(x.kind)||typeof x.k!=='string'||!x.k||x.k.length>180)return res.status(400).json({error:'Data tidak valid'});
