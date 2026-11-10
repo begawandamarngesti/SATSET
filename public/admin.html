@@ -39,9 +39,9 @@ async function loadOrders(more){
  O.list=O.list.concat(r.orders);O.more=r.orders.length>=40;if(r.counts)O.counts=r.counts;render();
 }
 function setSt(s){O.st=s;loadOrders()}
-function go(t){tab=t;E=null;ED=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else if(t==='r'||t==='d')loadRecap();else render()}
+function go(t){tab=t;E=null;ED=null;if(t==='o'){$('#app').innerHTML='Memuat pesanan...';loadOrders()}else if(t==='r'||t==='d'||t==='m')loadRecap();else render()}
 function render(){
- $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button onclick="go('r')">Rekap</button><button style="background:#16a34a" onclick="go('d')">Distribusi Barang</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():tab==='r'?recapView():tab==='d'?distView():E?editor():list());if(tab==='d')applyDF();if(tab==='r')applyRF();
+ $('#app').innerHTML=`<button onclick="go('p')">Produk</button><button onclick="go('o')">Pesanan</button><button onclick="go('r')">Rekap</button><button style="background:#16a34a" onclick="go('d')">Distribusi Barang</button><button style="background:#0d9488" onclick="go('m')">Supply Monitor</button><button class=g onclick="go('s')">Pengaturan</button>`+(tab==='o'?orders():tab==='s'?settings():tab==='r'?recapView():tab==='d'?distView():tab==='m'?supView():E?editor():list());if(tab==='d')applyDF();if(tab==='r')applyRF();if(tab==='m'){supSum();supFilter()}
 }
 /* ---------- produk ---------- */
 function list(){
@@ -133,34 +133,34 @@ async function saveSet(){const b=$('#ss');b.disabled=true;b.textContent='Menyimp
 /* ---------- rekap ---------- */
 let R=null,RO=null,ED=null,RS='';const LBL={model:'Model',size:'Ukuran',color:'Warna'};
 /* edit pesanan & stok disimpan di browser ini (localStorage) */
-let DBG='',EO={},STK={},DST={},SYNC=false,LOC={eo:{},stk:{},dst:{}};const PT={};
-try{LOC.eo=JSON.parse(localStorage.satset_eo||'{}');LOC.stk=JSON.parse(localStorage.satset_stk||'{}');LOC.dst=JSON.parse(localStorage.satset_dst||'{}')}catch(e){}
-const svLocal=()=>{try{localStorage.satset_eo=JSON.stringify(EO);localStorage.satset_stk=JSON.stringify(STK);localStorage.satset_dst=JSON.stringify(DST)}catch(e){}};
+let DBG='',EO={},STK={},DST={},SUP={},SYNC=false,SSYNC=false,LOC={eo:{},stk:{},dst:{},sup:{}};const PT={};
+try{LOC.eo=JSON.parse(localStorage.satset_eo||'{}');LOC.stk=JSON.parse(localStorage.satset_stk||'{}');LOC.dst=JSON.parse(localStorage.satset_dst||'{}');LOC.sup=JSON.parse(localStorage.satset_sup||'{}')}catch(e){}
+const svLocal=()=>{try{localStorage.satset_eo=JSON.stringify(EO);localStorage.satset_stk=JSON.stringify(STK);localStorage.satset_dst=JSON.stringify(DST);localStorage.satset_sup=JSON.stringify(SUP)}catch(e){}};
 const sbar=()=>SYNC?'<div class=c style="background:#dcfce7;border:2px solid #16a34a"><b style="color:#166534">✅ MODE SERVER (v4): edit, stok, dan centang tersimpan di server dan terlihat di semua laptop.</b></div>':'<div class=c style="background:#fee2e2;border:2px solid #dc2626"><b style="color:#b91c1c">⚠ MODE BROWSER SAJA: data cuma tersimpan di laptop ini dan TIDAK terlihat di laptop lain.</b><div class=sm style="color:#7f1d1d">Penyebab: file api/admin.js di server belum versi baru (belum ada w=state). Ganti api/admin.js dengan admin.js terbaru, tunggu deploy Vercel selesai, lalu hard refresh.</div><div class=sm style="color:#7f1d1d;margin-top:4px">Respon server untuk w=state: <code>'+esc(DBG)+'</code></div></div>';
 const hasLoc=()=>SYNC&&Object.values(LOC).some(o=>Object.keys(o).length);
-/* data edit/stok/distribusi disimpan di server (tabel settings) supaya dipakai bersama; kalau API belum ditambah, otomatis pakai browser saja */
+/* data edit/stok/distribusi/supply disimpan di server (tabel settings) supaya dipakai bersama; kalau API belum ditambah, otomatis pakai browser saja */
 async function loadState(){
  let st;try{st=await api(null,'?w=state')}catch(e){st={error:String(e)}}
  DBG=JSON.stringify(st).slice(0,160);
- if(st&&st.eo&&st.stk&&st.dst){EO=st.eo;STK=st.stk;DST=st.dst;SYNC=true}
- else{SYNC=false;EO=LOC.eo;STK=LOC.stk;DST=LOC.dst}
+ if(st&&st.eo&&st.stk&&st.dst){EO=st.eo;STK=st.stk;DST=st.dst;SYNC=true;SSYNC=!!st.sup;SUP=st.sup||LOC.sup}
+ else{SYNC=false;SSYNC=false;EO=LOC.eo;STK=LOC.stk;DST=LOC.dst;SUP=LOC.sup}
 }
 async function pst(kind,k,v){
- const M=kind==='eo'?EO:kind==='stk'?STK:DST;
+ const M={eo:EO,stk:STK,dst:DST,sup:SUP}[kind];
  if(v==null)delete M[k];else M[k]=v;
- if(!SYNC){svLocal();return}
+ if(!(kind==='sup'?SSYNC:SYNC)){svLocal();return}
  const r=await api({a:'state_set',kind,k,v:v==null?null:v});
  if(!r||!r.ok)alert('Gagal menyimpan ke server. Coba lagi.');
 }
 function stkSave(k,v){clearTimeout(PT[k]);PT[k]=setTimeout(()=>{delete PT[k];pst('stk',k,v)},500)}
 const migBtn=()=>hasLoc()?`<div style="margin-top:6px"><button class=g onclick=migrate()>⬆ Kirim data edit/stok/centang dari browser ini ke server</button></div>`:'';
 async function migrate(){
- const it=[];for(const kd of ['eo','stk','dst'])for(const [k,v] of Object.entries(LOC[kd]))it.push({kind:kd,k,v});
+ const it=[];for(const kd of ['eo','stk','dst','sup'])for(const [k,v] of Object.entries(LOC[kd]))it.push({kind:kd,k,v});
  if(!it.length)return;
  if(!confirm('Kirim '+it.length+' data dari browser ini ke server? Data di server dengan kunci yang sama akan tertimpa.'))return;
  for(let i=0;i<it.length;i+=100){const r=await api({a:'state_bulk',items:it.slice(i,i+100)});if(!r||!r.ok)return}
- try{localStorage.removeItem('satset_eo');localStorage.removeItem('satset_stk');localStorage.removeItem('satset_dst')}catch(e){}
- LOC={eo:{},stk:{},dst:{}};await loadRecap();alert('Data terkirim ke server.');
+ try{localStorage.removeItem('satset_eo');localStorage.removeItem('satset_stk');localStorage.removeItem('satset_dst');localStorage.removeItem('satset_sup')}catch(e){}
+ LOC={eo:{},stk:{},dst:{},sup:{}};await loadRecap();alert('Data terkirim ke server.');
 }
 const tot=it=>it.reduce((s,i)=>s+(+i.qty||0)*(+i.price||0),0);
 const ov=o=>{const e=EO[o.id];return e?{...o,name:e.name,items:e.items,total:tot(e.items),edited:true}:o};
@@ -171,12 +171,12 @@ let RT=null,rbusy=false;
 async function refreshRecap(silent){
  if(rbusy)return;rbusy=true;
  try{
-  if(Object.keys(PT).length)await new Promise(z=>setTimeout(z,900));await loadState();const r=await api(null,'?w=recap&status='+RS),o=(await allRaw()).sort(byDate);
-  R=r;RO=o;RT=new Date();if(tab==='r'||tab==='d')render();
+  if(Object.keys(PT).length||Object.keys(supTimers).length)await new Promise(z=>setTimeout(z,900));await loadState();const r=await api(null,'?w=recap&status='+RS),o=(await allRaw()).sort(byDate);
+  R=r;RO=o;RT=new Date();if(tab==='r'||tab==='d'||tab==='m')render();
  }finally{rbusy=false}
 }
 /* otomatis sinkron tiap 30 detik, tidak mengganggu kalau sedang edit/mengetik */
-setInterval(()=>{if((tab==='r'||tab==='d')&&R&&!ED&&!rbusy&&$('#dl').style.display!=='block'&&$('#dm').style.display!=='flex'&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))refreshRecap(true)},30000);
+setInterval(()=>{if((tab==='r'||tab==='d'||tab==='m')&&R&&!ED&&!rbusy&&$('#dl').style.display!=='block'&&$('#dm').style.display!=='flex'&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))refreshRecap(true)},30000);
 function stat(q,k){
  const s=STK[k]||0;
  const d=q-s;return d>0?`<span class=bad>Kurang ${d}</span>`:d===0?'<span class=ok>Aman</span>':`<span class=ok>Aman (lebih ${-d})</span>`;
@@ -285,6 +285,51 @@ function dmSave(id,x){
  const o=ordOf(id),i=o.items[x],q=+i.qty||0;let v=Math.floor(+$('#dmq').value);
  if(isNaN(v)||v<0)v=0;if(v>q)v=q;
  pst('dst',dk(o,i),v>0?v:null);dmX();refreshD(id);
+}
+/* ---------- supply monitor ---------- */
+let SQ='';
+const supTimers={};
+const supNeed=()=>{const m={};RO.map(ov).forEach(o=>o.items.forEach(i=>{const k=String(i.name);m[k]=(m[k]||0)+(+i.qty||0)}));return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]))};
+const supStat=(q,s)=>{const d=q-s;return d>0?`<span class=bad>Kurang ${d}</span>`:`<span class=ok>Aman${d<0?' (lebih '+(-d)+')':''}</span>`};
+function supSum(){
+ const b=$('#ssum');if(!b||!RO)return;
+ const L=supNeed();let aman=0,kur=0,unit=0;
+ L.forEach(([k,q])=>{const d=q-(SUP[k]||0);if(d>0){kur++;unit+=d}else aman++});
+ b.innerHTML=`${L.length} jenis barang · <span class=ok>${aman} aman</span> · <span class=bad>${kur} kurang</span>${unit?` (total kurang <b>${unit}</b> unit)`:''}`;
+}
+function supRow(tr,k,q){
+ const s=SUP[k]||0,done=q>0&&s>=q;
+ tr.querySelector('.ss').innerHTML=supStat(q,s);
+ tr.querySelector('input[type=checkbox]').checked=done;
+ tr.classList.toggle('dn',done);
+ supSum();
+}
+function supSave(k,v){clearTimeout(supTimers[k]);supTimers[k]=setTimeout(()=>{delete supTimers[k];pst('sup',k,v)},500)}
+function supIn(el){
+ const k=el.dataset.n,q=+el.dataset.q,v=el.value===''?null:Math.max(0,Math.floor(+el.value||0));
+ if(v===null)delete SUP[k];else SUP[k]=v;
+ supSave(k,v);supRow(el.closest('tr'),k,q);
+}
+function supChk(el){
+ const tr=el.closest('tr'),inp=tr.querySelector('input[type=number]'),k=inp.dataset.n,q=+inp.dataset.q;
+ clearTimeout(supTimers[k]);delete supTimers[k];
+ if(el.checked){SUP[k]=q;inp.value=q;pst('sup',k,q)}
+ else{delete SUP[k];inp.value='';pst('sup',k,null)}
+ supRow(tr,k,q);
+}
+function supFilter(){
+ const q=SQ.trim().toLowerCase();
+ document.querySelectorAll('#stb tr[data-f]').forEach(r=>{r.style.display=(!q||mt(r.dataset.f,q))?'':'none'});
+}
+function supView(){
+ if(!RO)return 'Memuat...';
+ const L=supNeed();
+ const warn=SSYNC?'':'<div class=c style="background:#fee2e2;border:2px solid #dc2626"><b style="color:#b91c1c">⚠ Supply Monitor tersimpan di browser ini saja.</b><div class=sm>Update api/admin.js (tambah kind "sup"), deploy, lalu hard refresh supaya data dipakai bersama.</div></div>';
+ return sbar()+warn+`<div class=c><b style="color:#0d9488;font-size:17px">Supply Monitor</b>
+ <div class=sm>Isi kolom "Terkumpul" dengan jumlah barang yang sudah kamu dapat. Klik ceklis kalau sudah lengkap, angka terisi otomatis. Tersimpan di server dan dipakai bersama.</div>
+ <div class=row style="margin-top:8px"><button onclick="refreshRecap()">🔄 Refresh</button><input placeholder="🔍 Cari barang" value="${esc(SQ)}" oninput="SQ=this.value;supFilter()" style="min-width:220px"></div>
+ <div id=ssum class=sm style="margin-top:6px"></div>
+ <div style="overflow-x:auto"><table class=rt><tr><th>Barang<th class=n>Dibeli pembeli<th>Terkumpul<th>Status<th>Lengkap</tr><tbody id=stb>${L.map(([k,q])=>{const s=SUP[k]||0,done=q>0&&s>=q;return `<tr data-f="${esc(k.toLowerCase())}" class="${done?'dn':''}"><td>${esc(k)}<td class=n><b>${q}</b><td><input type=number min=0 data-n="${esc(k)}" data-q=${q} placeholder=0 value="${SUP[k]??''}" oninput=supIn(this)><td class=ss>${supStat(q,s)}<td><input type=checkbox style="width:22px;height:22px;margin:0" ${done?'checked':''} onchange=supChk(this)></tr>`}).join('')||'<tr><td colspan=5>Belum ada pesanan.</td></tr>'}</tbody></table></div></div>`;
 }
 /* ---------- download rekap (popup pilihan) ---------- */
 async function allRaw(){
